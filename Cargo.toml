@@ -1,0 +1,28 @@
+[package]
+name = "minecraft-slp"
+description = "Easily ping and get the status of Minecraft: Java Edition servers"
+version = "0.1.0"
+edition = "2021"
+authors = ["doinkythederp"]
+rust-version = "1.64"
+categories = ["network-programming", "parser-implementations"]
+keywords = ["minecraft", "server-list-ping", "ping"]
+
+[features]
+default = ["parse", "connect"]
+parse = ["dep:serde", "dep:serde_json"]
+connect = ["dep:tokio"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytes = "1.2.1"
+mc-varint = "0.1.1"
+serde = { version = "1.0.145", optional = true, features = ["serde_derive"] }
+serde_json = { version = "1.0.85", optional = true }
+thiserror = "1.0.35"
+tokio = { version = "1.21.1", features = ["net", "io-util"], optional = true }
+tracing = "0.1.36"
+
+[dev-dependencies]
+tokio = { version = "1.21.1", features = ["full"] }
