@@ -1,14 +1,32 @@
-use std::{str::FromStr, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+    time::Duration,
+};
 
 use minecraft_slp::{connect, parse::ServerPingInfo, protocol::SlpError, Frame};
+use tokio::net::lookup_host;
 
 #[tokio::main]
 async fn main() -> Result<(), SlpError> {
     let args = std::env::args().collect::<Vec<_>>();
-    let addr = args.get(1).map(String::as_str).unwrap_or("localhost:3000");
+    let host = args
+        .get(1)
+        .map(String::to_string)
+        .expect("address required");
+    let port = args
+        .get(2)
+        .map(|port| port.parse().expect("invalid port"))
+        .unwrap_or(25565);
 
-    let mut connection = connect(addr).await?;
-    println!("Connected to {}", addr);
+    let addr = lookup_host(format!("{}:{}", host, port))
+        .await?
+        .next()
+        .expect("dns lookup failed");
+
+    println!("Connecting to {}", addr);
+    let mut connection = connect(&addr).await?;
+    println!("Connected.");
     connection
         .write_frame(connection.create_handshake_frame())
         .await?;
