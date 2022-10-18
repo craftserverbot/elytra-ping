@@ -6,7 +6,7 @@ use std::{
 use minecraft_slp::{
     connect,
     parse::ServerPingInfo,
-    protocol::{ProtocolError, SlpProtocol, Frame},
+    protocol::{Frame, ProtocolError, SlpProtocol},
 };
 use tokio::net::lookup_host;
 

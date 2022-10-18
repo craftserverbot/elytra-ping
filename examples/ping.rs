@@ -1,7 +1,4 @@
-
-use minecraft_slp::{
-    ping,
-};
+use minecraft_slp::ping;
 use tokio::net::lookup_host;
 
 #[tokio::main]

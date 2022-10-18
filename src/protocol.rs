@@ -4,15 +4,15 @@ use crate::parse::ServerPingInfo;
 use bytes::{Buf, BytesMut};
 use mc_varint::{VarInt, VarIntRead, VarIntWrite};
 use std::{
+    fmt::Debug,
     io::{Cursor, Write},
     mem::size_of,
-    net::{SocketAddr},
+    net::SocketAddr,
     time::Duration,
-    fmt::Debug,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
-    net::{TcpStream, ToSocketAddrs},
+    net::TcpStream,
 };
 use tracing::{event, instrument, Level};
 
