@@ -335,32 +335,4 @@ impl SlpProtocol {
             _ => Err(PingError::InvalidResponse),
         }
     }
-
-    #[cfg(feature = "simple")]
-    pub async fn ping(addrs: impl ToSocketAddrs + Debug) -> Result<(ServerPingInfo, Duration), PingError> {
-        use crate::connect;
-
-        let mut client = connect(addrs).await?;
-        client.handshake().await?;
-        let status = client.get_status().await?;
-        let latency = client.get_latency().await?;
-        client.disconnect().await?;
-        Ok((status, latency))
-    }
-
-    #[cfg(feature = "simple")]
-    pub async fn ping_or_timeout(
-        addrs: impl ToSocketAddrs + Debug,
-        timeout: Duration,
-    ) -> Result<(ServerPingInfo, Duration), PingError> {
-        use tokio::{select, time};
-        let sleep = time::sleep(timeout);
-        tokio::pin!(sleep);
-
-        select! {
-            biased;
-            info = Self::ping(addrs) => info,
-            _ = sleep => Err(PingError::Timeout),
-        }
-    }
 }
