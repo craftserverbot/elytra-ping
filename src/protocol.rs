@@ -3,6 +3,7 @@ use bytes::{Buf, BytesMut};
 use mc_varint::{VarInt, VarIntRead, VarIntWrite};
 use std::{
     io::{Cursor, Write},
+    mem::size_of,
     net::SocketAddr,
 };
 use tokio::{
@@ -15,6 +16,8 @@ use tracing::{event, instrument, Level};
 // which is licensed here: https://github.com/tokio-rs/mini-redis/blob/cefca5377af54520904c55764d16fc7c0a291902/LICENSE
 
 mod error {
+    use std::array::TryFromSliceError;
+
     use thiserror::Error;
 
     use crate::mc_string::McStringError;
@@ -50,6 +53,8 @@ mod error {
         InvalidFrame(i32),
         #[error("failed to decode string: {0}")]
         StringDecodeFailed(#[from] McStringError),
+        #[error("failed to decode ping response payload: {0}")]
+        PingResponseDecodeFailed(#[from] TryFromSliceError),
     }
 }
 
@@ -77,6 +82,12 @@ pub enum Frame {
     StatusResponse {
         json: String,
     },
+    PingRequest {
+        payload: i64,
+    },
+    PingResponse {
+        payload: i64,
+    },
 }
 
 impl Frame {
@@ -84,6 +95,8 @@ impl Frame {
     pub const HANDSHAKE_ID: i32 = 0x00;
     pub const STATUS_REQUEST_ID: i32 = 0x00;
     pub const STATUS_RESPONSE_ID: i32 = 0x00;
+    pub const PING_REQUEST_ID: i32 = 0x01;
+    pub const PING_RESPONSE_ID: i32 = 0x01;
 
     /// Checks if an entire message can be decoded from `buf`
     pub fn check(buf: &mut Cursor<&[u8]>) -> Result<usize, FrameError> {
@@ -114,6 +127,11 @@ impl Frame {
             Self::STATUS_RESPONSE_ID => {
                 let json = decode_mc_string(src.chunk())?.to_owned();
                 Ok(Frame::StatusResponse { json })
+            }
+            Self::PING_RESPONSE_ID => {
+                let (bytes, _) = src.chunk().split_at(size_of::<i64>());
+                let payload = i64::from_be_bytes(bytes.try_into()?);
+                Ok(Frame::PingResponse { payload })
             }
             id => Err(FrameError::InvalidFrame(id)),
         }
@@ -172,6 +190,16 @@ impl SlpProtocol {
                 event!(Level::TRACE, "writing status response frame");
                 packet_data.write_var_int(VarInt::from(Frame::STATUS_RESPONSE_ID as i32))?;
                 Write::write(&mut packet_data, &encode_mc_string(&json)?)?;
+            }
+            Frame::PingRequest { payload } => {
+                event!(Level::TRACE, "writing ping request frame");
+                packet_data.write_var_int(VarInt::from(Frame::PING_REQUEST_ID as i32))?;
+                Write::write(&mut packet_data, &payload.to_be_bytes())?;
+            }
+            Frame::PingResponse { payload } => {
+                event!(Level::TRACE, "writing ping response frame");
+                packet_data.write_var_int(VarInt::from(Frame::PING_RESPONSE_ID as i32))?;
+                Write::write(&mut packet_data, &payload.to_be_bytes())?;
             }
         }
 
