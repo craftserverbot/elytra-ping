@@ -11,13 +11,13 @@ pub mod protocol;
 pub mod parse;
 
 #[cfg(feature = "connect")]
-use crate::protocol::{SlpError, SlpProtocol};
+use crate::protocol::{ProtocolError, SlpProtocol};
 #[cfg(feature = "connect")]
 pub use protocol::Frame;
 
 #[cfg(feature = "connect")]
 #[instrument]
-pub async fn connect<T>(addrs: T) -> Result<SlpProtocol, SlpError>
+pub async fn connect<T>(addrs: T) -> Result<SlpProtocol, ProtocolError>
 where
     T: ToSocketAddrs + std::fmt::Debug,
 {
@@ -27,7 +27,7 @@ where
         Some(socket_addrs) => socket_addrs,
         None => {
             event!(Level::INFO, "DNS lookup failed for address");
-            return Err(protocol::SlpError::DNSLookupFailed(addrs_debug));
+            return Err(protocol::ProtocolError::DNSLookupFailed(addrs_debug));
         }
     };
 

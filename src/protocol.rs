@@ -1,21 +1,25 @@
 use crate::mc_string::{decode_mc_string, encode_mc_string};
+#[cfg(feature = "parse")]
+use crate::parse::ServerPingInfo;
 use bytes::{Buf, BytesMut};
 use mc_varint::{VarInt, VarIntRead, VarIntWrite};
 use std::{
     io::{Cursor, Write},
     mem::size_of,
-    net::SocketAddr,
+    net::{SocketAddr},
+    time::Duration,
+    fmt::Debug,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
-    net::TcpStream,
+    net::{TcpStream, ToSocketAddrs},
 };
 use tracing::{event, instrument, Level};
 
 // module adapted from tokio's mini-redis
 // which is licensed here: https://github.com/tokio-rs/mini-redis/blob/cefca5377af54520904c55764d16fc7c0a291902/LICENSE
 
-mod error {
+pub mod error {
     use std::array::TryFromSliceError;
 
     use thiserror::Error;
@@ -23,7 +27,7 @@ mod error {
     use crate::mc_string::McStringError;
 
     #[derive(Error, Debug)]
-    pub enum SlpError {
+    pub enum ProtocolError {
         #[error("io error: {0}")]
         Io(#[from] std::io::Error),
         #[error("dns lookup failed for address `{0}`")]
@@ -56,10 +60,23 @@ mod error {
         #[error("failed to decode ping response payload: {0}")]
         PingResponseDecodeFailed(#[from] TryFromSliceError),
     }
+
+    #[cfg(feature = "simple")]
+    #[derive(Error, Debug)]
+    pub enum PingError {
+        #[error("connection failed")]
+        Protocol(#[from] ProtocolError),
+        #[error("connection closed")]
+        ConnectionClosed,
+        #[error("invalid response from server")]
+        InvalidResponse,
+        #[error("server did not respond in time")]
+        Timeout,
+    }
 }
 
-use self::error::FrameError;
-pub use self::error::SlpError;
+pub use self::error::ProtocolError;
+use self::error::*;
 
 #[derive(Debug)]
 pub struct SlpProtocol {
@@ -165,7 +182,7 @@ impl SlpProtocol {
 
     /// Sends frame data over the connection as a packet.
     #[instrument]
-    pub async fn write_frame(&mut self, frame: Frame) -> Result<(), SlpError> {
+    pub async fn write_frame(&mut self, frame: Frame) -> Result<(), ProtocolError> {
         let mut packet_data: Vec<u8> = Vec::with_capacity(5);
 
         match frame {
@@ -219,7 +236,7 @@ impl SlpProtocol {
         Ok(())
     }
 
-    pub async fn read_frame(&mut self) -> Result<Option<Frame>, SlpError> {
+    pub async fn read_frame(&mut self) -> Result<Option<Frame>, ProtocolError> {
         loop {
             // Attempt to parse a frame from the buffered data. If enough data
             // has been buffered, the frame is returned.
@@ -241,13 +258,13 @@ impl SlpProtocol {
                 if self.buffer.is_empty() {
                     return Ok(None);
                 } else {
-                    return Err(SlpError::ConnectionClosed);
+                    return Err(ProtocolError::ConnectionClosed);
                 }
             }
         }
     }
 
-    pub fn parse_frame(&mut self) -> Result<Option<Frame>, SlpError> {
+    pub fn parse_frame(&mut self) -> Result<Option<Frame>, ProtocolError> {
         let mut buf = Cursor::new(&self.buffer[..]);
 
         // Check whether a full frame is available
@@ -272,8 +289,78 @@ impl SlpProtocol {
         }
     }
 
-    pub async fn disconnect(mut self) -> Result<(), SlpError> {
+    pub async fn disconnect(mut self) -> Result<(), ProtocolError> {
         self.stream.shutdown().await?;
         Ok(())
+    }
+
+    #[cfg(feature = "simple")]
+    pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
+        self.write_frame(self.create_handshake_frame()).await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "simple")]
+    pub async fn get_status(&mut self) -> Result<ServerPingInfo, PingError> {
+        use std::str::FromStr;
+        self.write_frame(Frame::StatusRequest).await?;
+        let frame = self
+            .read_frame()
+            .await?
+            .ok_or(PingError::ConnectionClosed)?;
+        let frame_data = match frame {
+            Frame::StatusResponse { json } => json,
+            _ => return Err(PingError::InvalidResponse),
+        };
+        ServerPingInfo::from_str(&frame_data).map_err(|_| PingError::InvalidResponse)
+    }
+
+    #[cfg(feature = "simple")]
+    pub async fn get_latency(&mut self) -> Result<Duration, PingError> {
+        use std::time::Instant;
+        const PING_PAYLOAD: i64 = 54321;
+
+        let ping_time = Instant::now();
+
+        self.write_frame(Frame::PingRequest {
+            payload: PING_PAYLOAD,
+        })
+        .await?;
+        let frame = self
+            .read_frame()
+            .await?
+            .ok_or(PingError::ConnectionClosed)?;
+        match frame {
+            Frame::PingResponse { payload: _ } => Ok(ping_time.elapsed()),
+            _ => Err(PingError::InvalidResponse),
+        }
+    }
+
+    #[cfg(feature = "simple")]
+    pub async fn ping(addrs: impl ToSocketAddrs + Debug) -> Result<(ServerPingInfo, Duration), PingError> {
+        use crate::connect;
+
+        let mut client = connect(addrs).await?;
+        client.handshake().await?;
+        let status = client.get_status().await?;
+        let latency = client.get_latency().await?;
+        client.disconnect().await?;
+        Ok((status, latency))
+    }
+
+    #[cfg(feature = "simple")]
+    pub async fn ping_or_timeout(
+        addrs: impl ToSocketAddrs + Debug,
+        timeout: Duration,
+    ) -> Result<(ServerPingInfo, Duration), PingError> {
+        use tokio::{select, time};
+        let sleep = time::sleep(timeout);
+        tokio::pin!(sleep);
+
+        select! {
+            biased;
+            info = Self::ping(addrs) => info,
+            _ = sleep => Err(PingError::Timeout),
+        }
     }
 }

@@ -6,12 +6,12 @@ use std::{
 use minecraft_slp::{
     connect,
     parse::ServerPingInfo,
-    protocol::{SlpError, SlpProtocol},
+    protocol::{ProtocolError, SlpProtocol},
     Frame,
 };
 use tokio::net::lookup_host;
 
-async fn next_frame(connection: &mut SlpProtocol) -> Result<Frame, SlpError> {
+async fn next_frame(connection: &mut SlpProtocol) -> Result<Frame, ProtocolError> {
     Ok(connection
         .read_frame()
         .await?
@@ -19,7 +19,7 @@ async fn next_frame(connection: &mut SlpProtocol) -> Result<Frame, SlpError> {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), SlpError> {
+async fn main() -> Result<(), ProtocolError> {
     let args = std::env::args().collect::<Vec<_>>();
     let host = args
         .get(1)
