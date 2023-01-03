@@ -70,6 +70,8 @@ pub mod error {
         ConnectionClosed,
         #[error("invalid response from server")]
         InvalidResponse,
+        #[error("failed to parse server response")]
+        Parse(#[from] serde_json::Error),
         #[error("server did not respond in time")]
         Timeout,
     }
@@ -312,7 +314,7 @@ impl SlpProtocol {
             Frame::StatusResponse { json } => json,
             _ => return Err(PingError::InvalidResponse),
         };
-        ServerPingInfo::from_str(&frame_data).map_err(|_| PingError::InvalidResponse)
+        ServerPingInfo::from_str(&frame_data).map_err(|err| PingError::Parse(err))
     }
 
     #[cfg(feature = "simple")]
