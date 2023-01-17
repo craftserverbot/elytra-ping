@@ -1,4 +1,4 @@
-use minecraft_slp::ping;
+use elytra_ping::ping;
 use tokio::net::lookup_host;
 
 #[tokio::main]

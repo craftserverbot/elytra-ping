@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use minecraft_slp::{
+use elytra_ping::{
     connect,
     parse::ServerPingInfo,
     protocol::{Frame, ProtocolError, SlpProtocol},
@@ -45,7 +45,7 @@ async fn main() -> Result<(), ProtocolError> {
     tokio::time::sleep(Duration::from_millis(250)).await;
 
     connection
-        .write_frame(minecraft_slp::protocol::Frame::StatusRequest)
+        .write_frame(elytra_ping::protocol::Frame::StatusRequest)
         .await?;
     println!("Requested status");
     let frame = next_frame(&mut connection).await?;

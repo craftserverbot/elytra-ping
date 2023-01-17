@@ -1,5 +1,5 @@
 [package]
-name = "minecraft-slp"
+name = "elytra-ping"
 description = "Easily ping and get the status of Minecraft: Java Edition servers"
 version = "0.2.0"
 edition = "2021"
@@ -23,7 +23,12 @@ mc-varint = "0.1.1"
 serde = { version = "1.0.145", optional = true, features = ["serde_derive"] }
 serde_json = { version = "1.0.85", optional = true }
 thiserror = "1.0.35"
-tokio = { version = "1.21.1", features = ["net", "io-util", "macros", "time"], optional = true }
+tokio = { version = "1.21.1", features = [
+    "net",
+    "io-util",
+    "macros",
+    "time",
+], optional = true }
 tracing = "0.1.36"
 
 [dev-dependencies]
