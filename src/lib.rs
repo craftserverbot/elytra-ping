@@ -75,15 +75,17 @@ pub async fn ping_or_timeout(
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    const PING_TIMEOUT: Duration = Duration::from_secs(5);
+
+    #[tokio::test]
+    async fn hypixel() {
+        let address = "mc.hypixel.net";
+        let port = 25565;
+        let ping = ping_or_timeout((address, port), PING_TIMEOUT).await;
+        ping.unwrap();
     }
 }
-*/
