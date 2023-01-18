@@ -29,13 +29,8 @@ async fn main() -> Result<(), ProtocolError> {
         .map(|port| port.parse().expect("invalid port"))
         .unwrap_or(25565);
 
-    let addr = lookup_host(format!("{}:{}", host, port))
-        .await?
-        .next()
-        .expect("dns lookup failed");
-
-    println!("Connecting to {}", addr);
-    let mut connection = connect(&addr).await?;
+    println!("Connecting to {}:{}", host, port);
+    let mut connection = connect((host, port)).await?;
     println!("Connected.");
     connection
         .write_frame(connection.create_handshake_frame())

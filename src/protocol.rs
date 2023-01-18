@@ -133,7 +133,8 @@ use self::error::*;
 
 #[derive(Debug)]
 pub struct SlpProtocol {
-    addrs: SocketAddr,
+    hostname: String,
+    port: u16,
     stream: BufWriter<TcpStream>,
     buffer: BytesMut,
 }
@@ -224,20 +225,20 @@ pub enum ProtocolState {
 }
 
 impl SlpProtocol {
-    pub fn new(addrs: SocketAddr, stream: TcpStream) -> Self {
+    pub fn new(hostname: String, port: u16, stream: TcpStream) -> Self {
         Self {
-            addrs,
+            hostname,
+            port,
             stream: BufWriter::new(stream),
             buffer: BytesMut::with_capacity(4096),
         }
     }
 
     pub fn create_handshake_frame(&self) -> Frame {
-        let ip = self.addrs.ip().to_string();
         Frame::Handshake {
             protocol: VarInt::from(Frame::PROTOCOL_VERSION),
-            address: ip,
-            port: self.addrs.port(),
+            address: self.hostname.to_owned(),
+            port: self.port,
             state: VarInt::from(ProtocolState::Status as i32),
         }
     }
@@ -245,6 +246,8 @@ impl SlpProtocol {
     /// Sends frame data over the connection as a packet.
     #[instrument]
     pub async fn write_frame(&mut self, frame: Frame) -> Result<(), ProtocolError> {
+        event!(Level::DEBUG, "Writing frame: {frame:?}");
+
         let mut packet_data: Vec<u8> = Vec::with_capacity(5);
 
         match frame {

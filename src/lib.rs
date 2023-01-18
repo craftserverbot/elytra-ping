@@ -21,20 +21,16 @@ pub use parse::ServerPingInfo;
 
 #[cfg(feature = "connect")]
 #[instrument]
-pub async fn connect<T>(addrs: T) -> Result<SlpProtocol, ProtocolError>
-where
-    T: ToSocketAddrs + std::fmt::Debug,
-{
+pub async fn connect(addrs: (String, u16)) -> Result<SlpProtocol, ProtocolError> {
     use snafu::{Backtrace, GenerateImplicitData};
 
-    let addrs_debug = format!("{:?}", addrs);
     // lookup_host can return multiple but we just need one so we discard the rest
-    let socket_addrs = match lookup_host(addrs).await?.next() {
+    let socket_addrs = match lookup_host(addrs.clone()).await?.next() {
         Some(socket_addrs) => socket_addrs,
         None => {
             event!(Level::INFO, "DNS lookup failed for address");
             return Err(protocol::ProtocolError::DNSLookupFailed {
-                address: addrs_debug,
+                address: format!("{:?}", addrs),
                 backtrace: Backtrace::generate(),
             });
         }
@@ -43,7 +39,7 @@ where
     match TcpStream::connect(socket_addrs).await {
         Ok(stream) => {
             event!(Level::INFO, "Connected to SLP server");
-            Ok(SlpProtocol::new(socket_addrs, stream))
+            Ok(SlpProtocol::new(addrs.0, addrs.1, stream))
         }
         Err(error) => {
             event!(Level::INFO, "Failed to connect to SLP server: {}", error);
@@ -53,9 +49,7 @@ where
 }
 
 #[cfg(feature = "simple")]
-pub async fn ping(
-    addrs: impl ToSocketAddrs + Debug,
-) -> Result<(ServerPingInfo, Duration), PingError> {
+pub async fn ping(addrs: (String, u16)) -> Result<(ServerPingInfo, Duration), PingError> {
     let mut client = connect(addrs).await?;
     client.handshake().await?;
     let status = client.get_status().await?;
@@ -66,7 +60,7 @@ pub async fn ping(
 
 #[cfg(feature = "simple")]
 pub async fn ping_or_timeout(
-    addrs: impl ToSocketAddrs + Debug,
+    addrs: (String, u16),
     timeout: Duration,
 ) -> Result<(ServerPingInfo, Duration), PingError> {
     use snafu::{Backtrace, GenerateImplicitData};
@@ -87,11 +81,21 @@ mod tests {
 
     use super::*;
 
+    #[ctor::ctor]
+    fn init_logger() {
+        use tracing_subscriber::EnvFilter;
+
+        tracing_subscriber::fmt()
+            .pretty()
+            .with_env_filter(EnvFilter::from_default_env())
+            .init();
+    }
+
     const PING_TIMEOUT: Duration = Duration::from_secs(5);
 
     #[tokio::test]
     async fn hypixel() {
-        let address = "mc.hypixel.net";
+        let address = "mc.hypixel.net".to_owned();
         let port = 25565;
         let ping = ping_or_timeout((address, port), PING_TIMEOUT).await;
         if let Err(err) = ping {

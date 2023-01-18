@@ -13,14 +13,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|port| port.parse().expect("invalid port"))
         .unwrap_or(25565);
 
-    let addr = lookup_host(format!("{}:{}", host, port))
-        .await?
-        .next()
-        .expect("dns lookup failed");
+    println!("Pinging {}:{}", host, port);
 
-    println!("Pinging {}", addr);
-
-    let (info, latency) = ping(&addr).await?;
+    let (info, latency) = ping((host, port)).await?;
     println!("Server info: {:#?}", info);
     println!("Latency: {}ms", latency.as_millis());
 
