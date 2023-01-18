@@ -3,6 +3,7 @@ use crate::mc_string::{decode_mc_string, encode_mc_string};
 use crate::parse::ServerPingInfo;
 use bytes::{Buf, BytesMut};
 use mc_varint::{VarInt, VarIntRead, VarIntWrite};
+use snafu::{Backtrace, GenerateImplicitData};
 use std::{
     fmt::Debug,
     io::{Cursor, Write},
@@ -22,59 +23,109 @@ use tracing::{event, instrument, Level};
 pub mod error {
     use std::array::TryFromSliceError;
 
-    use thiserror::Error;
+    use snafu::Snafu;
 
     use crate::mc_string::McStringError;
 
-    #[derive(Error, Debug)]
-    pub enum ProtocolError {
-        #[error("io error: {0}")]
-        Io(#[from] std::io::Error),
-        #[error("dns lookup failed for address `{0}`")]
-        DNSLookupFailed(String),
-        #[error("failed to encode string as bytes: {0}")]
-        StringEncodeFailed(#[from] McStringError),
-        #[error(
-            "failed to send packet because it is too long (more than {} bytes)",
-            i32::MAX
-        )]
-        PacketTooLong,
-        #[error("connection closed before packet finished being read")]
-        ConnectionClosed,
-        #[error("failed to parse packet: {0}")]
-        ParseFailed(#[from] FrameError),
-    }
+    pub mod protocol {
+        use snafu::Backtrace;
 
-    #[derive(Error, Debug)]
-    pub enum FrameError {
-        #[error("frame is missing data")]
-        Incomplete,
-        #[error("io error: {0}")]
-        Io(#[from] std::io::Error),
-        #[error("frame declares it has negative length")]
-        InvalidLength,
-        #[error("cannot parse frame with id {0}")]
-        InvalidFrame(i32),
-        #[error("failed to decode string: {0}")]
-        StringDecodeFailed(#[from] McStringError),
-        #[error("failed to decode ping response payload: {0}")]
-        PingResponseDecodeFailed(#[from] TryFromSliceError),
+        use super::*;
+        #[derive(Snafu, Debug)]
+        pub enum ProtocolError {
+            #[snafu(display("io error: {source}"), context(false))]
+            Io {
+                source: std::io::Error,
+                backtrace: Backtrace,
+            },
+            #[snafu(display("dns lookup failed for address `{address}`"))]
+            DNSLookupFailed {
+                address: String,
+                backtrace: Backtrace,
+            },
+            #[snafu(display("failed to encode string as bytes: {source}"), context(false))]
+            StringEncodeFailed {
+                source: McStringError,
+                backtrace: Backtrace,
+            },
+            #[snafu(display(
+                "failed to send packet because it is too long (more than {} bytes)",
+                i32::MAX
+            ))]
+            PacketTooLong { backtrace: Backtrace },
+            #[snafu(display("connection closed before packet finished being read"))]
+            ConnectionClosed { backtrace: Backtrace },
+            #[snafu(display("failed to parse packet: {source}"), context(false))]
+            ParseFailed {
+                source: FrameError,
+                backtrace: Backtrace,
+            },
+        }
     }
+    pub use protocol::ProtocolError;
 
-    #[cfg(feature = "simple")]
-    #[derive(Error, Debug)]
-    pub enum PingError {
-        #[error("connection failed")]
-        Protocol(#[from] ProtocolError),
-        #[error("connection closed")]
-        ConnectionClosed,
-        #[error("invalid response from server")]
-        InvalidResponse,
-        #[error("failed to parse server response")]
-        Parse(#[from] serde_json::Error),
-        #[error("server did not respond in time")]
-        Timeout,
+    mod frame {
+        use snafu::Backtrace;
+
+        use super::*;
+
+        #[derive(Snafu, Debug)]
+        pub enum FrameError {
+            #[snafu(display("frame is missing data"))]
+            Incomplete { backtrace: Backtrace },
+            #[snafu(display("io error: {source}"), context(false))]
+            Io {
+                source: std::io::Error,
+                backtrace: Backtrace,
+            },
+            #[snafu(display("frame declares it has negative length"))]
+            InvalidLength { backtrace: Backtrace },
+            #[snafu(display("cannot parse frame with id {id}"))]
+            InvalidFrame { id: i32, backtrace: Backtrace },
+            #[snafu(display("failed to decode string: {source}"), context(false))]
+            StringDecodeFailed {
+                source: McStringError,
+                backtrace: Backtrace,
+            },
+            #[snafu(
+                display("failed to decode ping response payload: {source}"),
+                context(false)
+            )]
+            PingResponseDecodeFailed {
+                source: TryFromSliceError,
+                backtrace: Backtrace,
+            },
+        }
     }
+    pub use frame::FrameError;
+
+    mod ping {
+        use snafu::Backtrace;
+
+        use super::*;
+
+        #[cfg(feature = "simple")]
+        #[derive(Snafu, Debug)]
+        pub enum PingError {
+            #[snafu(display("connection failed"), context(false))]
+            Protocol {
+                source: ProtocolError,
+                backtrace: Backtrace,
+            },
+            #[snafu(display("connection closed"))]
+            ConnectionClosed { backtrace: Backtrace },
+            #[snafu(display("invalid response from server"))]
+            InvalidResponse { backtrace: Backtrace },
+            #[snafu(display("failed to parse server response"), context(false))]
+            Parse {
+                source: serde_json::Error,
+                backtrace: Backtrace,
+            },
+            #[snafu(display("server did not respond in time"))]
+            Timeout { backtrace: Backtrace },
+        }
+    }
+    pub use ping::PingError;
 }
 
 pub use self::error::ProtocolError;
@@ -122,9 +173,13 @@ impl Frame {
         let buf_len = buf.get_ref().len();
         // the varint at the beginning contains the size of the rest of the frame
         let remaining_data_len: usize =
-            i32::from(buf.read_var_int().map_err(|_| FrameError::Incomplete)?)
-                .try_into()
-                .map_err(|_| FrameError::InvalidLength)?;
+            i32::from(buf.read_var_int().map_err(|_| FrameError::Incomplete {
+                backtrace: Backtrace::generate(),
+            })?)
+            .try_into()
+            .map_err(|_| FrameError::InvalidLength {
+                backtrace: Backtrace::generate(),
+            })?;
         let header_len = buf.position() as usize;
         let total_len = header_len + remaining_data_len;
 
@@ -134,7 +189,9 @@ impl Frame {
         if is_valid {
             Ok(total_len - 1)
         } else {
-            Err(FrameError::Incomplete)
+            Err(FrameError::Incomplete {
+                backtrace: Backtrace::generate(),
+            })
         }
     }
 
@@ -152,7 +209,10 @@ impl Frame {
                 let payload = i64::from_be_bytes(bytes.try_into()?);
                 Ok(Frame::PingResponse { payload })
             }
-            id => Err(FrameError::InvalidFrame(id)),
+            id => Err(FrameError::InvalidFrame {
+                id,
+                backtrace: Backtrace::generate(),
+            }),
         }
     }
 }
@@ -260,7 +320,9 @@ impl SlpProtocol {
                 if self.buffer.is_empty() {
                     return Ok(None);
                 } else {
-                    return Err(ProtocolError::ConnectionClosed);
+                    return Err(ProtocolError::ConnectionClosed {
+                        backtrace: Backtrace::generate(),
+                    });
                 }
             }
         }
@@ -285,7 +347,7 @@ impl SlpProtocol {
                 Ok(Some(frame))
             }
             // Not enough data has been buffered
-            Err(FrameError::Incomplete) => Ok(None),
+            Err(FrameError::Incomplete { .. }) => Ok(None),
             // An error was encountered
             Err(e) => Err(e.into()),
         }
@@ -309,12 +371,18 @@ impl SlpProtocol {
         let frame = self
             .read_frame()
             .await?
-            .ok_or(PingError::ConnectionClosed)?;
+            .ok_or(PingError::ConnectionClosed {
+                backtrace: Backtrace::generate(),
+            })?;
         let frame_data = match frame {
             Frame::StatusResponse { json } => json,
-            _ => return Err(PingError::InvalidResponse),
+            _ => {
+                return Err(PingError::InvalidResponse {
+                    backtrace: Backtrace::generate(),
+                })
+            }
         };
-        ServerPingInfo::from_str(&frame_data).map_err(|err| PingError::Parse(err))
+        ServerPingInfo::from_str(&frame_data).map_err(PingError::from)
     }
 
     #[cfg(feature = "simple")]
@@ -331,10 +399,14 @@ impl SlpProtocol {
         let frame = self
             .read_frame()
             .await?
-            .ok_or(PingError::ConnectionClosed)?;
+            .ok_or(PingError::ConnectionClosed {
+                backtrace: Backtrace::generate(),
+            })?;
         match frame {
             Frame::PingResponse { payload: _ } => Ok(ping_time.elapsed()),
-            _ => Err(PingError::InvalidResponse),
+            _ => Err(PingError::InvalidResponse {
+                backtrace: Backtrace::generate(),
+            }),
         }
     }
 }

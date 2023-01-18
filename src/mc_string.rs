@@ -3,18 +3,18 @@ use std::io::Cursor;
 
 mod error {
     use super::*;
-    use thiserror::Error;
+    use snafu::Snafu;
 
-    #[derive(Error, Debug)]
+    #[derive(Snafu, Debug)]
     pub enum McStringError {
-        #[error("io error: {0}")]
-        Io(#[from] std::io::Error),
-        #[error(
-            "string is too long (is {0} bytes, but expected less than {} bytes)",
+        #[snafu(display("io error: {source}"))]
+        Io { source: std::io::Error },
+        #[snafu(display(
+            "string is too long (is {length} bytes, but expected less than {} bytes)",
             MAX_LEN
-        )]
-        TooLong(usize),
-        #[error("invalid string format")]
+        ))]
+        TooLong { length: usize },
+        #[snafu(display("invalid string format"))]
         InvalidFormat,
     }
 }
@@ -27,16 +27,23 @@ pub fn encode_mc_string(string: &str) -> Result<Vec<u8>, McStringError> {
     let len = string.len();
     // VarInt max length is 5 bytes
     let mut bytes = Vec::with_capacity(len + 5);
-    bytes.write_var_int(VarInt::from(
-        i32::try_from(len).ok().ok_or(McStringError::TooLong(len))?,
-    ))?;
+    bytes
+        .write_var_int(VarInt::from(
+            i32::try_from(len)
+                .ok()
+                .ok_or(McStringError::TooLong { length: len })?,
+        ))
+        .map_err(|io| McStringError::Io { source: io })?;
     bytes.extend_from_slice(string.as_bytes());
     Ok(bytes)
 }
 
 pub fn decode_mc_string(bytes: &[u8]) -> Result<&str, McStringError> {
     let mut bytes = Cursor::new(bytes);
-    let len: i32 = bytes.read_var_int()?.into();
+    let len: i32 = bytes
+        .read_var_int()
+        .map_err(|io| McStringError::Io { source: io })?
+        .into();
     let len = usize::try_from(len).map_err(|_| McStringError::InvalidFormat)?;
 
     let string_start = bytes.position() as usize;
