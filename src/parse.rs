@@ -1,4 +1,10 @@
-use serde::Deserialize;
+use std::{fmt, marker::PhantomData, str::FromStr};
+
+use serde::{
+    de::{self, MapAccess, Visitor},
+    Deserialize, Deserializer,
+};
+use void::Void;
 
 use self::fancy_string::FancyText;
 
@@ -6,10 +12,45 @@ use self::fancy_string::FancyText;
 pub struct ServerPingInfo {
     pub version: Option<ServerVersion>,
     pub players: Option<ServerPlayers>,
-    pub description: Option<ServerDescription>,
+    #[serde(deserialize_with = "string_or_struct")]
+    pub description: ServerDescription,
     pub favicon: Option<String>,
-    #[serde(rename = "modinfo")]
+    #[serde(rename = "deserialize_description")]
     pub mod_info: Option<ServerModInfo>,
+}
+
+fn string_or_struct<'de, D>(deserializer: D) -> Result<ServerDescription, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct StringOrStruct;
+
+    impl<'de> Visitor<'de> for StringOrStruct {
+        type Value = ServerDescription;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("string or map")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<ServerDescription, E>
+        where
+            E: de::Error,
+        {
+            Ok(ServerDescription {
+                text: value.to_owned(),
+                extra: None,
+            })
+        }
+
+        fn visit_map<M>(self, map: M) -> Result<ServerDescription, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
+        }
+    }
+
+    deserializer.deserialize_any(StringOrStruct)
 }
 
 #[derive(Deserialize, Debug)]

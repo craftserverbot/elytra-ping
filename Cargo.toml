@@ -30,6 +30,7 @@ tokio = { version = "1.21.1", features = [
     "time",
 ], optional = true }
 tracing = "0.1.36"
+void = "1.0.2"
 
 [dev-dependencies]
 ctor = "0.1.26"

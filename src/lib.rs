@@ -98,8 +98,20 @@ mod tests {
         let address = "mc.hypixel.net".to_owned();
         let port = 25565;
         let ping = ping_or_timeout((address, port), PING_TIMEOUT).await;
-        if let Err(err) = ping {
-            panic!("Error: {err} ({err:?})\n{:?}", err.backtrace().unwrap());
+        match ping {
+            Err(err) => panic!("Error: {err} ({err:?})\n{:?}", err.backtrace().unwrap()),
+            Ok(ping) => println!("{:#?} in {:?}", ping.0, ping.1),
+        }
+    }
+
+    #[tokio::test]
+    async fn mineplex() {
+        let address = "us.mineplex.com".to_owned();
+        let port = 25565;
+        let ping = ping_or_timeout((address, port), PING_TIMEOUT).await;
+        match ping {
+            Err(err) => panic!("Error: {err} ({err:?})\n{:?}", err.backtrace().unwrap()),
+            Ok(ping) => println!("{:#?} in {:?}", ping.0, ping.1),
         }
     }
 }
