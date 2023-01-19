@@ -8,7 +8,7 @@ use elytra_ping::{
     parse::ServerPingInfo,
     protocol::{Frame, ProtocolError, SlpProtocol},
 };
-use tokio::net::lookup_host;
+
 
 async fn next_frame(connection: &mut SlpProtocol) -> Result<Frame, ProtocolError> {
     Ok(connection

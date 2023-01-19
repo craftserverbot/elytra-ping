@@ -8,7 +8,6 @@ use std::{
     fmt::Debug,
     io::{Cursor, Write},
     mem::size_of,
-    net::SocketAddr,
     time::Duration,
 };
 use tokio::{

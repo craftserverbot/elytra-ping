@@ -1,6 +1,6 @@
-use std::{fmt::Debug, time::Duration};
+use std::{time::Duration};
 #[cfg(feature = "connect")]
-use tokio::net::{lookup_host, TcpStream, ToSocketAddrs};
+use tokio::net::{lookup_host, TcpStream};
 use tracing::{event, instrument, Level};
 
 #[cfg(feature = "connect")]

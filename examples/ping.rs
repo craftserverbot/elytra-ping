@@ -1,5 +1,5 @@
 use elytra_ping::ping;
-use tokio::net::lookup_host;
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

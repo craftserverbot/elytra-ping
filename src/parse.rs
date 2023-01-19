@@ -1,10 +1,9 @@
-use std::{fmt, marker::PhantomData, str::FromStr};
+use std::fmt;
 
 use serde::{
     de::{self, MapAccess, Visitor},
     Deserialize, Deserializer,
 };
-use void::Void;
 
 use self::fancy_string::FancyText;
 
