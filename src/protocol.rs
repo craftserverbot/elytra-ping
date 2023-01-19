@@ -257,7 +257,7 @@ impl SlpProtocol {
                 state,
             } => {
                 event!(Level::TRACE, "writing handshake frame");
-                packet_data.write_var_int(VarInt::from(Frame::HANDSHAKE_ID as i32))?;
+                packet_data.write_var_int(VarInt::from(Frame::HANDSHAKE_ID))?;
                 packet_data.write_var_int(protocol)?;
                 Write::write(&mut packet_data, &encode_mc_string(&address)?)?;
                 Write::write(&mut packet_data, &port.to_be_bytes())?;
@@ -265,21 +265,21 @@ impl SlpProtocol {
             }
             Frame::StatusRequest => {
                 event!(Level::TRACE, "writing status request frame");
-                packet_data.write_var_int(VarInt::from(Frame::STATUS_REQUEST_ID as i32))?;
+                packet_data.write_var_int(VarInt::from(Frame::STATUS_REQUEST_ID))?;
             }
             Frame::StatusResponse { json } => {
                 event!(Level::TRACE, "writing status response frame");
-                packet_data.write_var_int(VarInt::from(Frame::STATUS_RESPONSE_ID as i32))?;
+                packet_data.write_var_int(VarInt::from(Frame::STATUS_RESPONSE_ID))?;
                 Write::write(&mut packet_data, &encode_mc_string(&json)?)?;
             }
             Frame::PingRequest { payload } => {
                 event!(Level::TRACE, "writing ping request frame");
-                packet_data.write_var_int(VarInt::from(Frame::PING_REQUEST_ID as i32))?;
+                packet_data.write_var_int(VarInt::from(Frame::PING_REQUEST_ID))?;
                 Write::write(&mut packet_data, &payload.to_be_bytes())?;
             }
             Frame::PingResponse { payload } => {
                 event!(Level::TRACE, "writing ping response frame");
-                packet_data.write_var_int(VarInt::from(Frame::PING_RESPONSE_ID as i32))?;
+                packet_data.write_var_int(VarInt::from(Frame::PING_RESPONSE_ID))?;
                 Write::write(&mut packet_data, &payload.to_be_bytes())?;
             }
         }
