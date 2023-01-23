@@ -59,6 +59,11 @@ pub mod error {
                 source: FrameError,
                 backtrace: Backtrace,
             },
+            #[snafu(display("srv resolver creation failed: {source}"), context(false))]
+            SrvResolveError {
+                source: trust_dns_resolver::error::ResolveError,
+                backtrace: Backtrace,
+            },
         }
     }
     pub use protocol::ProtocolError;

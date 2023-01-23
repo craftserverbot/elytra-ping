@@ -1,4 +1,4 @@
-use std::{time::Duration};
+use std::time::Duration;
 #[cfg(feature = "connect")]
 use tokio::net::{lookup_host, TcpStream};
 use tracing::{event, instrument, Level};
@@ -21,8 +21,22 @@ pub use parse::ServerPingInfo;
 
 #[cfg(feature = "connect")]
 #[instrument]
-pub async fn connect(addrs: (String, u16)) -> Result<SlpProtocol, ProtocolError> {
+pub async fn connect(mut addrs: (String, u16)) -> Result<SlpProtocol, ProtocolError> {
     use snafu::{Backtrace, GenerateImplicitData};
+    use tracing::debug;
+    use trust_dns_resolver::TokioAsyncResolver;
+
+    let resolver = TokioAsyncResolver::tokio_from_system_conf()?;
+    if let Ok(records) = resolver
+        .srv_lookup(format!("_minecraft._tcp.{}", addrs.0))
+        .await
+    {
+        if let Some(record) = records.iter().next() {
+            let record = record.target().to_utf8();
+            debug!("Found SRV record: {} -> {}", addrs.0, record);
+            addrs.0 = record;
+        }
+    }
 
     // lookup_host can return multiple but we just need one so we discard the rest
     let socket_addrs = match lookup_host(addrs.clone()).await?.next() {
@@ -105,8 +119,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn hypixel_bare() {
+        let address = "hypixel.net".to_owned();
+        let port = 25565;
+        let ping = ping_or_timeout((address, port), PING_TIMEOUT).await;
+        match ping {
+            Err(err) => panic!("Error: {err} ({err:?})\n{:?}", err.backtrace().unwrap()),
+            Ok(ping) => println!("{:#?} in {:?}", ping.0, ping.1),
+        }
+    }
+
+    #[tokio::test]
     async fn mineplex() {
         let address = "us.mineplex.com".to_owned();
+        let port = 25565;
+        let ping = ping_or_timeout((address, port), PING_TIMEOUT).await;
+        match ping {
+            Err(err) => panic!("Error: {err} ({err:?})\n{:?}", err.backtrace().unwrap()),
+            Ok(ping) => println!("{:#?} in {:?}", ping.0, ping.1),
+        }
+    }
+
+    #[tokio::test]
+    async fn mineplex_bare() {
+        let address = "mineplex.com".to_owned();
         let port = 25565;
         let ping = ping_or_timeout((address, port), PING_TIMEOUT).await;
         match ping {

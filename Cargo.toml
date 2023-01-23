@@ -11,7 +11,7 @@ keywords = ["minecraft", "server-list-ping", "ping"]
 [features]
 default = ["parse", "connect", "simple"]
 parse = ["dep:serde", "dep:serde_json", "dep:void"]
-connect = ["dep:tokio"]
+connect = ["dep:tokio", "dep:trust-dns-resolver"]
 simple = ["connect", "parse"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -29,6 +29,7 @@ tokio = { version = "1.21.1", features = [
     "time",
 ], optional = true }
 tracing = "0.1.36"
+trust-dns-resolver = { version = "0.22.0", optional = true }
 void = { version = "1.0.2", optional = true }
 
 [dev-dependencies]
