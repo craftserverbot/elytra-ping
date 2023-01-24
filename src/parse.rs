@@ -7,7 +7,7 @@ use serde::{
 
 use self::fancy_string::FancyText;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Hash)]
 pub struct ServerPingInfo {
     pub version: Option<ServerVersion>,
     pub players: Option<ServerPlayers>,
@@ -52,32 +52,32 @@ where
     deserializer.deserialize_any(StringOrStruct)
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Hash)]
 pub struct ServerVersion {
     pub name: String,
     pub protocol: u32,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Hash)]
 pub struct ServerPlayers {
     pub max: u32,
     pub online: u32,
     pub sample: Option<Vec<ServerPlayersSample>>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Hash)]
 pub struct ServerPlayersSample {
     pub name: Option<String>,
     pub id: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Hash)]
 pub struct ServerDescription {
     pub text: String,
     pub extra: Option<FancyText>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Hash)]
 pub struct ServerModInfo {
     #[serde(rename = "type")]
     pub loader_type: String,
@@ -94,7 +94,7 @@ impl std::str::FromStr for ServerPingInfo {
 pub mod fancy_string {
     use serde::Deserialize;
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Debug, Deserialize, Hash)]
     pub struct FancyText(pub Vec<FancyTextComponent>);
 
     impl FancyText {
@@ -107,7 +107,7 @@ pub mod fancy_string {
         }
     }
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Debug, Deserialize, Hash)]
     #[serde(untagged)]
     pub enum FancyTextComponent {
         ColorText {
