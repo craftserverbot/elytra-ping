@@ -60,7 +60,7 @@ client.write_frame(Frame::StatusRequest).await?;
 
 // Read the status packet from the server
 let frame: Frame = client
-    .read_frame()
+    .read_frame(None)
     .await?
     .expect("connection closed by server");
 
@@ -74,4 +74,29 @@ println!("Status: {}", status);
 // It's important to run the `disconnect`
 // method when you're done to clean up the connection.
 connection.disconnect().await?;
+```
+
+The low-level API can also parse packets meant to be sent to the server. Because the handshake packet ID and the status request packet ID are the same, it's necessary to keep some kind of state to decide which makes sense in the particular situation.
+
+```rs
+let mut server = SlpProtocol::new(server_hostname, server_port, tcp_stream);
+let mut server_state = ServerState::Handshake;
+
+loop {
+    let frame: Frame = server
+        .read_frame(server_state)
+        .await?
+        .expect("client lost connection"); server_state = ServerState::Status;
+
+    match frame {
+        Frame::Handshake { status, protocol, ..} => {
+            // todo: ensure suitable values for status and protocol
+            server_state = ServerState::Status;
+        }
+
+        Frame::StatusRequest => {
+            server.write_frame(StatusResponse { json: "{...}" }).await?;
+        }
+    }
+}
 ```

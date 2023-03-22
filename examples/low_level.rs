@@ -9,10 +9,9 @@ use elytra_ping::{
     protocol::{Frame, ProtocolError, SlpProtocol},
 };
 
-
 async fn next_frame(connection: &mut SlpProtocol) -> Result<Frame, ProtocolError> {
     Ok(connection
-        .read_frame()
+        .read_frame(None)
         .await?
         .expect("Connection closed before response was received"))
 }

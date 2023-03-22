@@ -165,6 +165,15 @@ pub enum Frame {
     },
 }
 
+/// Controls what packets a server can recieve
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServerState {
+    /// Waiting for the Handshake packet
+    Handshake,
+    /// Ready to respond to status and ping requests
+    Status,
+}
+
 impl Frame {
     pub const PROTOCOL_VERSION: i32 = 754;
     pub const HANDSHAKE_ID: i32 = 0x00;
@@ -174,6 +183,8 @@ impl Frame {
     pub const PING_RESPONSE_ID: i32 = 0x01;
 
     /// Checks if an entire message can be decoded from `buf`
+    ///
+    /// If it can it will return the length of the message and move the cursor to the end of the header.
     pub fn check(buf: &mut Cursor<&[u8]>) -> Result<usize, FrameError> {
         let buf_len = buf.get_ref().len();
         // the varint at the beginning contains the size of the rest of the frame
@@ -200,25 +211,68 @@ impl Frame {
         }
     }
 
-    /// The message has already been validated with `check`.
-    pub fn parse(src: &mut Cursor<&[u8]>) -> Result<Frame, FrameError> {
+    /// Parse the body of a frame, after the message has already been validated with `check`.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - The buffer containing the message
+    /// * `server_state` - Switches between which type of frame to accept. Set to None to accept frames for the client.
+    #[allow(clippy::single_match)]
+    pub fn parse(
+        src: &mut Cursor<&[u8]>,
+        server_state: Option<ServerState>,
+    ) -> Result<Frame, FrameError> {
         let id = i32::from(src.read_var_int()?);
 
-        match id {
-            Self::STATUS_RESPONSE_ID => {
-                let json = decode_mc_string(src.chunk())?.to_owned();
-                Ok(Frame::StatusResponse { json })
+        match server_state {
+            Some(ServerState::Handshake) => match id {
+                Self::HANDSHAKE_ID => {
+                    let protocol = src.read_var_int()?;
+                    let address = decode_mc_string(src.chunk())?.to_owned();
+                    let port = src.get_u16();
+                    let state = src.read_var_int()?;
+                    return Ok(Frame::Handshake {
+                        protocol,
+                        address,
+                        port,
+                        state,
+                    });
+                }
+                _ => {}
+            },
+            Some(ServerState::Status) => {
+                match id {
+                    Self::STATUS_REQUEST_ID => {
+                        return Ok(Frame::StatusRequest);
+                    }
+                    Self::PING_REQUEST_ID => {
+                        // ping request a contains (usually) meaningless Java long
+                        let payload = src.get_i64();
+                        return Ok(Frame::PingRequest { payload });
+                    }
+                    _ => {}
+                }
             }
-            Self::PING_RESPONSE_ID => {
-                let (bytes, _) = src.chunk().split_at(size_of::<i64>());
-                let payload = i64::from_be_bytes(bytes.try_into()?);
-                Ok(Frame::PingResponse { payload })
+            None => {
+                match id {
+                    Self::STATUS_RESPONSE_ID => {
+                        let json = decode_mc_string(src.chunk())?.to_owned();
+                        return Ok(Frame::StatusResponse { json });
+                    }
+                    Self::PING_RESPONSE_ID => {
+                        // ping response contains the same Java long as the request
+                        let payload = src.get_i64();
+                        return Ok(Frame::PingResponse { payload });
+                    }
+                    _ => {}
+                }
             }
-            id => Err(FrameError::InvalidFrame {
-                id,
-                backtrace: Backtrace::generate(),
-            }),
         }
+
+        Err(FrameError::InvalidFrame {
+            id,
+            backtrace: Backtrace::generate(),
+        })
     }
 }
 
@@ -305,11 +359,19 @@ impl SlpProtocol {
         Ok(())
     }
 
-    pub async fn read_frame(&mut self) -> Result<Option<Frame>, ProtocolError> {
+    /// Recieve and parse a frame from the connection.
+    ///
+    /// # Arguments
+    ///
+    /// * `server_state` - Switches between which type of frame to accept. Set to None to accept frames for the client.
+    pub async fn read_frame(
+        &mut self,
+        server_state: Option<ServerState>,
+    ) -> Result<Option<Frame>, ProtocolError> {
         loop {
             // Attempt to parse a frame from the buffered data. If enough data
             // has been buffered, the frame is returned.
-            if let Some(frame) = self.parse_frame()? {
+            if let Some(frame) = self.parse_frame(server_state)? {
                 return Ok(Some(frame));
             }
 
@@ -335,7 +397,15 @@ impl SlpProtocol {
         }
     }
 
-    pub fn parse_frame(&mut self) -> Result<Option<Frame>, ProtocolError> {
+    /// Parse the most recent frame from the connection, removing it from the buffer.
+    ///
+    /// # Arguments
+    ///
+    /// * `server_state` - Switches between which type of frame to accept. Set to None to accept frames for the client.
+    pub fn parse_frame(
+        &mut self,
+        server_state: Option<ServerState>,
+    ) -> Result<Option<Frame>, ProtocolError> {
         let mut buf = Cursor::new(&self.buffer[..]);
 
         // Check whether a full frame is available
@@ -345,7 +415,7 @@ impl SlpProtocol {
                 let header_len = (buf.position() as usize) - 1;
 
                 // Parse the frame
-                let frame = Frame::parse(&mut buf)?;
+                let frame = Frame::parse(&mut buf, server_state)?;
 
                 // Discard the frame from the buffer
                 self.buffer.advance(header_len + len);
@@ -376,7 +446,7 @@ impl SlpProtocol {
         use std::str::FromStr;
         self.write_frame(Frame::StatusRequest).await?;
         let frame = self
-            .read_frame()
+            .read_frame(None)
             .await?
             .ok_or(PingError::ConnectionClosed {
                 backtrace: Backtrace::generate(),
@@ -404,7 +474,7 @@ impl SlpProtocol {
         })
         .await?;
         let frame = self
-            .read_frame()
+            .read_frame(None)
             .await?
             .ok_or(PingError::ConnectionClosed {
                 backtrace: Backtrace::generate(),
