@@ -7,7 +7,6 @@ use snafu::{Backtrace, GenerateImplicitData};
 use std::{
     fmt::Debug,
     io::{Cursor, Write},
-    mem::size_of,
     time::Duration,
 };
 use tokio::{

@@ -2,12 +2,12 @@ use std::fmt;
 
 use serde::{
     de::{self, MapAccess, Visitor},
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize,
 };
 
 use self::fancy_string::FancyText;
 
-#[derive(Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ServerPingInfo {
     pub version: Option<ServerVersion>,
     pub players: Option<ServerPlayers>,
@@ -52,32 +52,32 @@ where
     deserializer.deserialize_any(StringOrStruct)
 }
 
-#[derive(Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ServerVersion {
     pub name: String,
     pub protocol: u32,
 }
 
-#[derive(Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ServerPlayers {
     pub max: u32,
     pub online: u32,
     pub sample: Option<Vec<ServerPlayersSample>>,
 }
 
-#[derive(Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ServerPlayersSample {
     pub name: Option<String>,
     pub id: Option<String>,
 }
 
-#[derive(Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ServerDescription {
     pub text: String,
     pub extra: Option<FancyText>,
 }
 
-#[derive(Deserialize, Debug, Hash)]
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ServerModInfo {
     #[serde(rename = "type")]
     pub loader_type: String,
@@ -92,9 +92,9 @@ impl std::str::FromStr for ServerPingInfo {
 }
 
 pub mod fancy_string {
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
 
-    #[derive(Debug, Deserialize, Hash)]
+    #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq)]
     pub struct FancyText(pub Vec<FancyTextComponent>);
 
     impl FancyText {
@@ -107,7 +107,7 @@ pub mod fancy_string {
         }
     }
 
-    #[derive(Debug, Deserialize, Hash)]
+    #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq)]
     #[serde(untagged)]
     pub enum FancyTextComponent {
         ColorText {
