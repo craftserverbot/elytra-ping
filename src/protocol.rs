@@ -1,9 +1,11 @@
+use crate::mc_string::McStringError;
 use crate::mc_string::{decode_mc_string, encode_mc_string};
 #[cfg(feature = "parse")]
 use crate::parse::ServerPingInfo;
 use bytes::{Buf, BytesMut};
 use mc_varint::{VarInt, VarIntRead, VarIntWrite};
-use snafu::{Backtrace, GenerateImplicitData};
+use snafu::{Backtrace, GenerateImplicitData, Snafu};
+use std::array::TryFromSliceError;
 use std::{
     fmt::Debug,
     io::{Cursor, Write},
@@ -13,126 +15,98 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
     net::TcpStream,
 };
-use tracing::{event, instrument, trace, Level};
+use tracing::{debug, event, instrument, trace, Level};
 
 // module adapted from tokio's mini-redis
 // which is licensed here: https://github.com/tokio-rs/mini-redis/blob/cefca5377af54520904c55764d16fc7c0a291902/LICENSE
 
-pub mod error {
-    use std::array::TryFromSliceError;
-
-    use snafu::Snafu;
-
-    use crate::mc_string::McStringError;
-
-    pub mod protocol {
-        use snafu::Backtrace;
-
-        use super::*;
-        #[derive(Snafu, Debug)]
-        pub enum ProtocolError {
-            #[snafu(display("io error: {source}"), context(false))]
-            Io {
-                source: std::io::Error,
-                backtrace: Backtrace,
-            },
-            #[snafu(display("dns lookup failed for address `{address}`"))]
-            DNSLookupFailed {
-                address: String,
-                backtrace: Backtrace,
-            },
-            #[snafu(display("failed to encode string as bytes: {source}"), context(false))]
-            StringEncodeFailed {
-                source: McStringError,
-                backtrace: Backtrace,
-            },
-            #[snafu(display(
-                "failed to send packet because it is too long (more than {} bytes)",
-                i32::MAX
-            ))]
-            PacketTooLong { backtrace: Backtrace },
-            #[snafu(display("connection closed before packet finished being read"))]
-            ConnectionClosed { backtrace: Backtrace },
-            #[snafu(display("failed to parse packet: {source}"), context(false))]
-            ParseFailed {
-                source: FrameError,
-                backtrace: Backtrace,
-            },
-            #[snafu(display("srv resolver creation failed: {source}"), context(false))]
-            SrvResolveError {
-                source: trust_dns_resolver::error::ResolveError,
-                backtrace: Backtrace,
-            },
-        }
-    }
-    pub use protocol::ProtocolError;
-
-    mod frame {
-        use snafu::Backtrace;
-
-        use super::*;
-
-        #[derive(Snafu, Debug)]
-        pub enum FrameError {
-            #[snafu(display("frame is missing data"))]
-            Incomplete { backtrace: Backtrace },
-            #[snafu(display("io error: {source}"), context(false))]
-            Io {
-                source: std::io::Error,
-                backtrace: Backtrace,
-            },
-            #[snafu(display("frame declares it has negative length"))]
-            InvalidLength { backtrace: Backtrace },
-            #[snafu(display("cannot parse frame with id {id}"))]
-            InvalidFrame { id: i32, backtrace: Backtrace },
-            #[snafu(display("failed to decode string: {source}"), context(false))]
-            StringDecodeFailed {
-                source: McStringError,
-                backtrace: Backtrace,
-            },
-            #[snafu(
-                display("failed to decode ping response payload: {source}"),
-                context(false)
-            )]
-            PingResponseDecodeFailed {
-                source: TryFromSliceError,
-                backtrace: Backtrace,
-            },
-        }
-    }
-    pub use frame::FrameError;
-
-    mod ping {
-        use snafu::Backtrace;
-
-        use super::*;
-
-        #[cfg(feature = "simple")]
-        #[derive(Snafu, Debug)]
-        pub enum PingError {
-            #[snafu(display("connection failed"), context(false))]
-            Protocol {
-                source: ProtocolError,
-                backtrace: Backtrace,
-            },
-            #[snafu(display("connection closed"))]
-            ConnectionClosed { backtrace: Backtrace },
-            #[snafu(display("invalid response from server"))]
-            InvalidResponse { backtrace: Backtrace },
-            #[snafu(display("failed to parse server response"), context(false))]
-            Parse {
-                source: serde_json::Error,
-                backtrace: Backtrace,
-            },
-            #[snafu(display("server did not respond in time"))]
-            Timeout { backtrace: Backtrace },
-        }
-    }
-    pub use ping::PingError;
+#[derive(Snafu, Debug)]
+#[snafu(visibility(pub(crate)), module)]
+pub enum ProtocolError {
+    #[snafu(display("io error: {source}"), context(false))]
+    Io {
+        source: std::io::Error,
+        backtrace: Backtrace,
+    },
+    #[snafu(display("dns lookup failed for address `{address}`"))]
+    DNSLookupFailed {
+        address: String,
+        backtrace: Backtrace,
+    },
+    #[snafu(display("failed to encode string as bytes: {source}"), context(false))]
+    StringEncodeFailed {
+        source: McStringError,
+        backtrace: Backtrace,
+    },
+    #[snafu(display(
+        "failed to send packet because it is too long (more than {} bytes)",
+        i32::MAX
+    ))]
+    PacketTooLong { backtrace: Backtrace },
+    #[snafu(display("connection closed before packet finished being read"))]
+    ConnectionClosed { backtrace: Backtrace },
+    #[snafu(display("failed to parse packet: {source}"), context(false))]
+    ParseFailed {
+        source: FrameError,
+        backtrace: Backtrace,
+    },
+    #[snafu(display("srv resolver creation failed: {source}"), context(false))]
+    SrvResolveError {
+        source: trust_dns_resolver::error::ResolveError,
+        backtrace: Backtrace,
+    },
 }
 
-pub use self::error::ProtocolError;
-use self::error::*;
+#[derive(Snafu, Debug)]
+#[snafu(visibility(pub(crate)), module)]
+pub enum FrameError {
+    #[snafu(display("frame is missing data"))]
+    Incomplete { backtrace: Backtrace },
+    #[snafu(display("io error: {source}"), context(false))]
+    Io {
+        source: std::io::Error,
+        backtrace: Backtrace,
+    },
+    #[snafu(display("frame declares it has negative length"))]
+    InvalidLength { backtrace: Backtrace },
+    #[snafu(display("cannot parse frame with id {id}"))]
+    InvalidFrame { id: i32, backtrace: Backtrace },
+    #[snafu(display("failed to decode string: {source}"), context(false))]
+    StringDecodeFailed {
+        source: McStringError,
+        backtrace: Backtrace,
+    },
+    #[snafu(
+        display("failed to decode ping response payload: {source}"),
+        context(false)
+    )]
+    PingResponseDecodeFailed {
+        source: TryFromSliceError,
+        backtrace: Backtrace,
+    },
+}
+
+#[cfg(feature = "simple")]
+#[derive(Snafu, Debug)]
+#[snafu(visibility(pub(crate)), module)]
+pub enum PingError {
+    #[snafu(display("connection failed"), context(false))]
+    Protocol {
+        source: ProtocolError,
+        backtrace: Backtrace,
+    },
+    #[snafu(display("connection closed"))]
+    ConnectionClosed { backtrace: Backtrace },
+    #[snafu(display("invalid response from server"))]
+    InvalidResponse { backtrace: Backtrace },
+    #[snafu(display("failed to parse server response"), context(false))]
+    Parse {
+        source: serde_json::Error,
+        backtrace: Backtrace,
+    },
+    #[snafu(display("server did not respond in time"))]
+    Timeout { backtrace: Backtrace },
+}
 
 #[derive(Debug)]
 pub struct SlpProtocol {
@@ -279,7 +253,6 @@ pub enum ProtocolState {
     Status = 1,
     Login = 2,
 }
-
 impl SlpProtocol {
     pub fn new(hostname: String, port: u16, stream: TcpStream) -> Self {
         Self {
@@ -302,7 +275,7 @@ impl SlpProtocol {
     /// Sends frame data over the connection as a packet.
     #[instrument]
     pub async fn write_frame(&mut self, frame: Frame) -> Result<(), ProtocolError> {
-        event!(Level::DEBUG, "Writing frame: {frame:?}");
+        debug!("Writing frame: {frame:?}");
 
         let mut packet_data: Vec<u8> = Vec::with_capacity(5);
 
@@ -313,7 +286,7 @@ impl SlpProtocol {
                 port,
                 state,
             } => {
-                event!(Level::TRACE, "writing handshake frame");
+                trace!("writing handshake frame");
                 packet_data.write_var_int(VarInt::from(Frame::HANDSHAKE_ID))?;
                 packet_data.write_var_int(protocol)?;
                 Write::write(&mut packet_data, &encode_mc_string(&address)?)?;
@@ -321,21 +294,21 @@ impl SlpProtocol {
                 packet_data.write_var_int(state)?;
             }
             Frame::StatusRequest => {
-                event!(Level::TRACE, "writing status request frame");
+                trace!("writing status request frame");
                 packet_data.write_var_int(VarInt::from(Frame::STATUS_REQUEST_ID))?;
             }
             Frame::StatusResponse { json } => {
-                event!(Level::TRACE, "writing status response frame");
+                trace!("writing status response frame");
                 packet_data.write_var_int(VarInt::from(Frame::STATUS_RESPONSE_ID))?;
                 Write::write(&mut packet_data, &encode_mc_string(&json)?)?;
             }
             Frame::PingRequest { payload } => {
-                event!(Level::TRACE, "writing ping request frame");
+                trace!("writing ping request frame");
                 packet_data.write_var_int(VarInt::from(Frame::PING_REQUEST_ID))?;
                 Write::write(&mut packet_data, &payload.to_be_bytes())?;
             }
             Frame::PingResponse { payload } => {
-                event!(Level::TRACE, "writing ping response frame");
+                trace!("writing ping response frame");
                 packet_data.write_var_int(VarInt::from(Frame::PING_RESPONSE_ID))?;
                 Write::write(&mut packet_data, &payload.to_be_bytes())?;
             }
@@ -351,7 +324,7 @@ impl SlpProtocol {
         packet.write_var_int(len)?;
         Write::write(&mut packet, &packet_data)?;
 
-        event!(Level::TRACE, "sending the packet!");
+        trace!("sending the packet!");
         self.stream.write_all(&packet).await?;
         self.stream.flush().await?;
         Ok(())
@@ -443,18 +416,12 @@ impl SlpProtocol {
         let frame = self
             .read_frame(None)
             .await?
-            .ok_or(PingError::ConnectionClosed {
-                backtrace: Backtrace::generate(),
-            })?;
+            .ok_or_else(|| ping_error::ConnectionClosedSnafu.build())?;
         let frame_data = match frame {
             Frame::StatusResponse { json } => json,
-            _ => {
-                return Err(PingError::InvalidResponse {
-                    backtrace: Backtrace::generate(),
-                })
-            }
+            _ => return Err(ping_error::InvalidResponseSnafu.build()),
         };
-        ServerPingInfo::from_str(&frame_data).map_err(PingError::from)
+        Ok(ServerPingInfo::from_str(&frame_data)?)
     }
 
     #[cfg(feature = "simple")]
@@ -471,14 +438,10 @@ impl SlpProtocol {
         let frame = self
             .read_frame(None)
             .await?
-            .ok_or(PingError::ConnectionClosed {
-                backtrace: Backtrace::generate(),
-            })?;
+            .ok_or_else(|| ping_error::ConnectionClosedSnafu.build())?;
         match frame {
             Frame::PingResponse { payload: _ } => Ok(ping_time.elapsed()),
-            _ => Err(PingError::InvalidResponse {
-                backtrace: Backtrace::generate(),
-            }),
+            _ => Err(ping_error::InvalidResponseSnafu.build()),
         }
     }
 }

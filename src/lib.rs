@@ -1,16 +1,16 @@
 use std::time::Duration;
 #[cfg(feature = "connect")]
 use tokio::net::{lookup_host, TcpStream};
-use tracing::{event, instrument, Level};
+use tracing::{debug, info, instrument};
 
 #[cfg(feature = "connect")]
 pub mod mc_string;
 #[cfg(feature = "connect")]
 pub mod protocol;
 #[cfg(feature = "connect")]
-use crate::protocol::ProtocolError;
+use crate::protocol::{ping_error, protocol_error, ProtocolError};
 #[cfg(feature = "simple")]
-pub use protocol::error::PingError;
+pub use protocol::PingError;
 #[cfg(feature = "connect")]
 pub use protocol::SlpProtocol;
 
@@ -22,7 +22,6 @@ pub use parse::ServerPingInfo;
 #[cfg(feature = "connect")]
 #[instrument]
 pub async fn connect(mut addrs: (String, u16)) -> Result<SlpProtocol, ProtocolError> {
-    use snafu::{Backtrace, GenerateImplicitData};
     use tracing::debug;
     use trust_dns_resolver::TokioAsyncResolver;
 
@@ -42,21 +41,21 @@ pub async fn connect(mut addrs: (String, u16)) -> Result<SlpProtocol, ProtocolEr
     let socket_addrs = match lookup_host(addrs.clone()).await?.next() {
         Some(socket_addrs) => socket_addrs,
         None => {
-            event!(Level::INFO, "DNS lookup failed for address");
-            return Err(protocol::ProtocolError::DNSLookupFailed {
+            info!("DNS lookup failed for address");
+            return Err(protocol_error::DNSLookupFailedSnafu {
                 address: format!("{:?}", addrs),
-                backtrace: Backtrace::generate(),
-            });
+            }
+            .build());
         }
     };
 
     match TcpStream::connect(socket_addrs).await {
         Ok(stream) => {
-            event!(Level::INFO, "Connected to SLP server");
+            info!("Connected to SLP server");
             Ok(SlpProtocol::new(addrs.0, addrs.1, stream))
         }
         Err(error) => {
-            event!(Level::INFO, "Failed to connect to SLP server: {}", error);
+            info!("Failed to connect to SLP server: {}", error);
             Err(error.into())
         }
     }
@@ -77,7 +76,6 @@ pub async fn ping_or_timeout(
     addrs: (String, u16),
     timeout: Duration,
 ) -> Result<(ServerPingInfo, Duration), PingError> {
-    use snafu::{Backtrace, GenerateImplicitData};
     use tokio::{select, time};
     let sleep = time::sleep(timeout);
     tokio::pin!(sleep);
@@ -85,7 +83,7 @@ pub async fn ping_or_timeout(
     select! {
         biased;
         info = ping(addrs) => info,
-        _ = sleep => Err(PingError::Timeout { backtrace: Backtrace::generate() }),
+        _ = sleep => Err(ping_error::TimeoutSnafu.build()),
     }
 }
 
