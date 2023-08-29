@@ -130,6 +130,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "mineplex is shut down"]
     async fn mineplex() {
         let address = "us.mineplex.com".to_owned();
         let port = 25565;
@@ -141,6 +142,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "mineplex is shut down"]
     async fn mineplex_bare() {
         let address = "mineplex.com".to_owned();
         let port = 25565;

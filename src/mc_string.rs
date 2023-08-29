@@ -1,3 +1,4 @@
+use bytes::Buf;
 use mc_varint::{VarInt, VarIntRead, VarIntWrite};
 use std::io::Cursor;
 
@@ -38,18 +39,18 @@ pub fn encode_mc_string(string: &str) -> Result<Vec<u8>, McStringError> {
     Ok(bytes)
 }
 
-pub fn decode_mc_string(bytes: &[u8]) -> Result<&str, McStringError> {
-    let mut bytes = Cursor::new(bytes);
-    let len: i32 = bytes
+pub fn decode_mc_string(cursor: &mut Cursor<&[u8]>) -> Result<String, McStringError> {
+    let len: i32 = cursor
         .read_var_int()
         .map_err(|io| McStringError::Io { source: io })?
         .into();
     let len = usize::try_from(len).map_err(|_| McStringError::InvalidFormat)?;
 
-    let string_start = bytes.position() as usize;
-    let bytes = bytes.into_inner();
-    let string = std::str::from_utf8(&bytes[string_start..string_start + len])
-        .map_err(|_| McStringError::InvalidFormat)?;
+    let bytes = cursor.chunk();
+    let string = std::str::from_utf8(&bytes[..len])
+        .map_err(|_| McStringError::InvalidFormat)?
+        .to_string();
+    cursor.advance(len);
     Ok(string)
 }
 
@@ -61,7 +62,8 @@ mod tests {
     fn encode_and_decode_mc_string() {
         const STRING: &str = "hello world!!";
         let bytes = encode_mc_string(STRING).unwrap();
-        let decoded_string = decode_mc_string(&bytes).unwrap();
+        let mut cursor = Cursor::new(bytes.as_slice());
+        let decoded_string = decode_mc_string(&mut cursor).unwrap();
         assert_eq!(decoded_string, STRING);
     }
 }

@@ -13,7 +13,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
     net::TcpStream,
 };
-use tracing::{event, instrument, Level};
+use tracing::{event, instrument, trace, Level};
 
 // module adapted from tokio's mini-redis
 // which is licensed here: https://github.com/tokio-rs/mini-redis/blob/cefca5377af54520904c55764d16fc7c0a291902/LICENSE
@@ -181,11 +181,10 @@ impl Frame {
     pub const PING_REQUEST_ID: i32 = 0x01;
     pub const PING_RESPONSE_ID: i32 = 0x01;
 
-    /// Checks if an entire message can be decoded from `buf`
-    ///
-    /// If it can it will return the length of the message and move the cursor to the end of the header.
-    pub fn check(buf: &mut Cursor<&[u8]>) -> Result<usize, FrameError> {
-        let buf_len = buf.get_ref().len();
+    /// Checks if an entire message can be decoded from `buf`, advancing the cursor past the header
+    pub fn check(buf: &mut Cursor<&[u8]>) -> Result<(), FrameError> {
+        let available_data = buf.get_ref().len();
+
         // the varint at the beginning contains the size of the rest of the frame
         let remaining_data_len: usize =
             i32::from(buf.read_var_int().map_err(|_| FrameError::Incomplete {
@@ -199,11 +198,13 @@ impl Frame {
         let total_len = header_len + remaining_data_len;
 
         // if we don't have enough data the frame isn't valid yet
-        let is_valid = buf_len >= total_len;
+        let is_valid = available_data >= total_len;
 
         if is_valid {
-            Ok(total_len - 1)
+            trace!("Valid frame, packet size: {total_len}, header size: {header_len}, body size: {remaining_data_len}, downloaded: {available_data}");
+            Ok(())
         } else {
+            trace!("Invalid frame, packet size: {total_len}, downloaded: {available_data}");
             Err(FrameError::Incomplete {
                 backtrace: Backtrace::generate(),
             })
@@ -216,20 +217,19 @@ impl Frame {
     ///
     /// * `src` - The buffer containing the message
     /// * `server_state` - Switches between which type of frame to accept. Set to None to accept frames for the client.
-    #[allow(clippy::single_match)]
     pub fn parse(
-        src: &mut Cursor<&[u8]>,
+        cursor: &mut Cursor<&[u8]>,
         server_state: Option<ServerState>,
     ) -> Result<Frame, FrameError> {
-        let id = i32::from(src.read_var_int()?);
+        let id = i32::from(cursor.read_var_int()?);
 
         match server_state {
-            Some(ServerState::Handshake) => match id {
-                Self::HANDSHAKE_ID => {
-                    let protocol = src.read_var_int()?;
-                    let address = decode_mc_string(src.chunk())?.to_owned();
-                    let port = src.get_u16();
-                    let state = src.read_var_int()?;
+            Some(ServerState::Handshake) => {
+                if id == Self::HANDSHAKE_ID {
+                    let protocol = cursor.read_var_int()?;
+                    let address = decode_mc_string(cursor)?.to_owned();
+                    let port = cursor.get_u16();
+                    let state = cursor.read_var_int()?;
                     return Ok(Frame::Handshake {
                         protocol,
                         address,
@@ -237,8 +237,7 @@ impl Frame {
                         state,
                     });
                 }
-                _ => {}
-            },
+            }
             Some(ServerState::Status) => {
                 match id {
                     Self::STATUS_REQUEST_ID => {
@@ -246,7 +245,7 @@ impl Frame {
                     }
                     Self::PING_REQUEST_ID => {
                         // ping request a contains (usually) meaningless Java long
-                        let payload = src.get_i64();
+                        let payload = cursor.get_i64();
                         return Ok(Frame::PingRequest { payload });
                     }
                     _ => {}
@@ -255,12 +254,12 @@ impl Frame {
             None => {
                 match id {
                     Self::STATUS_RESPONSE_ID => {
-                        let json = decode_mc_string(src.chunk())?.to_owned();
+                        let json = decode_mc_string(cursor)?.to_owned();
                         return Ok(Frame::StatusResponse { json });
                     }
                     Self::PING_RESPONSE_ID => {
                         // ping response contains the same Java long as the request
-                        let payload = src.get_i64();
+                        let payload = cursor.get_i64();
                         return Ok(Frame::PingResponse { payload });
                     }
                     _ => {}
@@ -405,19 +404,16 @@ impl SlpProtocol {
         &mut self,
         server_state: Option<ServerState>,
     ) -> Result<Option<Frame>, ProtocolError> {
-        let mut buf = Cursor::new(&self.buffer[..]);
+        let mut cursor = Cursor::new(&self.buffer[..]);
 
         // Check whether a full frame is available
-        match Frame::check(&mut buf) {
-            Ok(len) => {
-                // Get the byte length of the header
-                let header_len = (buf.position() as usize) - 1;
+        match Frame::check(&mut cursor) {
+            Ok(()) => {
+                let frame = Frame::parse(&mut cursor, server_state)?;
 
-                // Parse the frame
-                let frame = Frame::parse(&mut buf, server_state)?;
-
-                // Discard the frame from the buffer
-                self.buffer.advance(header_len + len);
+                trace!("Discarding frame from buffer");
+                // current cursor position is the entire frame
+                self.buffer.advance(cursor.position() as usize);
 
                 // Return the frame to the caller.
                 Ok(Some(frame))
