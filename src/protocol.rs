@@ -1,7 +1,7 @@
 use crate::mc_string::McStringError;
 use crate::mc_string::{decode_mc_string, encode_mc_string};
-#[cfg(feature = "parse")]
-use crate::parse::ServerPingInfo;
+#[cfg(feature = "java_parse")]
+use crate::parse::JavaServerInfo;
 use bytes::{Buf, BytesMut};
 use mc_varint::{VarInt, VarIntRead, VarIntWrite};
 use snafu::{Backtrace, GenerateImplicitData, Snafu};
@@ -410,8 +410,9 @@ impl SlpProtocol {
     }
 
     #[cfg(feature = "simple")]
-    pub async fn get_status(&mut self) -> Result<ServerPingInfo, PingError> {
+    pub async fn get_status(&mut self) -> Result<JavaServerInfo, PingError> {
         use std::str::FromStr;
+
         self.write_frame(Frame::StatusRequest).await?;
         let frame = self
             .read_frame(None)
@@ -421,7 +422,7 @@ impl SlpProtocol {
             Frame::StatusResponse { json } => json,
             _ => return Err(ping_error::InvalidResponseSnafu.build()),
         };
-        Ok(ServerPingInfo::from_str(&frame_data)?)
+        Ok(JavaServerInfo::from_str(&frame_data)?)
     }
 
     #[cfg(feature = "simple")]

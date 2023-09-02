@@ -5,7 +5,7 @@ use std::{
 
 use elytra_ping::{
     connect,
-    parse::ServerPingInfo,
+    parse::JavaServerInfo,
     protocol::{Frame, ProtocolError, SlpProtocol},
 };
 
@@ -45,7 +45,7 @@ async fn main() -> Result<(), ProtocolError> {
     let frame = next_frame(&mut connection).await?;
 
     if let Frame::StatusResponse { json } = frame {
-        let info = ServerPingInfo::from_str(&json);
+        let info = JavaServerInfo::from_str(&json);
         println!("Server info: {:#?}", info);
     } else {
         println!("Error: received invalid response: {:?}", frame);

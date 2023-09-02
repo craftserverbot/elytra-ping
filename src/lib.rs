@@ -1,25 +1,28 @@
 use std::time::Duration;
-#[cfg(feature = "connect")]
+#[cfg(feature = "java_connect")]
 use tokio::net::{lookup_host, TcpStream};
 use tracing::{debug, info, instrument};
 
-#[cfg(feature = "connect")]
+#[cfg(feature = "java_connect")]
 pub mod mc_string;
-#[cfg(feature = "connect")]
+#[cfg(feature = "java_connect")]
 pub mod protocol;
-#[cfg(feature = "connect")]
+#[cfg(feature = "java_connect")]
 use crate::protocol::{ping_error, protocol_error, ProtocolError};
 #[cfg(feature = "simple")]
 pub use protocol::PingError;
-#[cfg(feature = "connect")]
+#[cfg(feature = "java_connect")]
 pub use protocol::SlpProtocol;
 
-#[cfg(feature = "parse")]
+#[cfg(feature = "java_parse")]
 pub mod parse;
-#[cfg(feature = "parse")]
-pub use parse::ServerPingInfo;
+#[cfg(feature = "java_parse")]
+pub use parse::JavaServerInfo;
 
-#[cfg(feature = "connect")]
+#[cfg(feature = "bedrock")]
+pub mod bedrock;
+
+#[cfg(feature = "java_connect")]
 #[instrument]
 pub async fn connect(mut addrs: (String, u16)) -> Result<SlpProtocol, ProtocolError> {
     use tracing::debug;
@@ -62,7 +65,7 @@ pub async fn connect(mut addrs: (String, u16)) -> Result<SlpProtocol, ProtocolEr
 }
 
 #[cfg(feature = "simple")]
-pub async fn ping(addrs: (String, u16)) -> Result<(ServerPingInfo, Duration), PingError> {
+pub async fn ping(addrs: (String, u16)) -> Result<(JavaServerInfo, Duration), PingError> {
     let mut client = connect(addrs).await?;
     client.handshake().await?;
     let status = client.get_status().await?;
@@ -75,7 +78,7 @@ pub async fn ping(addrs: (String, u16)) -> Result<(ServerPingInfo, Duration), Pi
 pub async fn ping_or_timeout(
     addrs: (String, u16),
     timeout: Duration,
-) -> Result<(ServerPingInfo, Duration), PingError> {
+) -> Result<(JavaServerInfo, Duration), PingError> {
     use tokio::{select, time};
     let sleep = time::sleep(timeout);
     tokio::pin!(sleep);

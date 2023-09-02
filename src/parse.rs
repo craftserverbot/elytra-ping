@@ -8,7 +8,8 @@ use serde::{
 use self::fancy_string::FancyText;
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
-pub struct ServerPingInfo {
+#[non_exhaustive]
+pub struct JavaServerInfo {
     pub version: Option<ServerVersion>,
     pub players: Option<ServerPlayers>,
     #[serde(deserialize_with = "string_or_struct")]
@@ -53,12 +54,14 @@ where
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ServerVersion {
     pub name: String,
     pub protocol: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ServerPlayers {
     pub max: u32,
     pub online: u32,
@@ -66,25 +69,28 @@ pub struct ServerPlayers {
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ServerPlayersSample {
     pub name: Option<String>,
     pub id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ServerDescription {
     pub text: String,
     pub extra: Option<FancyText>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ServerModInfo {
     #[serde(rename = "type")]
     pub loader_type: String,
     // pub mod_list: Vec<ServerModInfoMod>,
 }
 
-impl std::str::FromStr for ServerPingInfo {
+impl std::str::FromStr for JavaServerInfo {
     type Err = serde_json::Error;
     fn from_str(json: &str) -> Result<Self, Self::Err> {
         serde_json::from_str(json)
