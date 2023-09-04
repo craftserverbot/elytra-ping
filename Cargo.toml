@@ -1,7 +1,7 @@
 [package]
 name = "elytra-ping"
 description = "Easily ping and get the status of Minecraft: Java Edition servers"
-version = "2.0.0-rc.1"
+version = "2.0.0-rc.2"
 edition = "2021"
 authors = ["doinkythederp"]
 rust-version = "1.68"
