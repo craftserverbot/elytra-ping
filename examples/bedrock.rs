@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use elytra_ping::bedrock::ping;
+use elytra_ping::{bedrock::ping, JavaServerInfo};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,6 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (info, latency) = ping((host, port), Duration::from_secs(2), 3).await?;
     println!("Server info: {:#?}", info);
+    println!("Server info as Java: {:#?}", JavaServerInfo::from(info));
     println!("Latency: {}ms", latency.as_millis());
 
     Ok(())
