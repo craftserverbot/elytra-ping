@@ -14,19 +14,43 @@ use tracing::{debug, trace};
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct BedrockServerInfo {
+    /// Usually "MCPE" for bedrock or "MCEE" for education edition.
     edition: String,
     name: String,
-    protocol_version: String,
+    protocol_version: u32,
     mc_version: String,
-    online_players: String,
-    max_players: String,
-    server_id: Option<String>,
+    online_players: u32,
+    max_players: u32,
+    server_id: Option<u64>,
     map_name: Option<String>,
     game_mode: Option<String>,
-    numeric_game_mode: Option<String>,
-    ipv4_port: Option<String>,
-    ipv6_port: Option<String>,
+    numeric_game_mode: Option<u64>,
+    ipv4_port: Option<u16>,
+    ipv6_port: Option<u16>,
     extra: Vec<String>,
+}
+
+#[cfg(feature = "java_parse")]
+impl From<BedrockServerInfo> for crate::JavaServerInfo {
+    fn from(value: BedrockServerInfo) -> Self {
+        crate::JavaServerInfo {
+            version: Some(crate::parse::ServerVersion {
+                name: value.mc_version,
+                protocol: value.protocol_version,
+            }),
+            players: Some(crate::parse::ServerPlayers {
+                max: value.max_players,
+                online: value.online_players,
+                sample: None,
+            }),
+            description: crate::parse::ServerDescription {
+                text: value.name,
+                extra: None,
+            },
+            favicon: None,
+            mod_info: None,
+        }
+    }
 }
 
 #[derive(Debug, Snafu)]
@@ -42,16 +66,16 @@ impl FromStr for BedrockServerInfo {
             Some(BedrockServerInfo {
                 edition: components.next()?,
                 name: components.next()?,
-                protocol_version: components.next()?,
+                protocol_version: components.next().and_then(|s| s.parse().ok())?,
                 mc_version: components.next()?,
-                online_players: components.next()?,
-                max_players: components.next()?,
-                server_id: components.next(),
+                online_players: components.next().and_then(|s| s.parse().ok())?,
+                max_players: components.next().and_then(|s| s.parse().ok())?,
+                server_id: components.next().and_then(|s| s.parse().ok()),
                 map_name: components.next(),
                 game_mode: components.next(),
-                numeric_game_mode: components.next(),
-                ipv4_port: components.next(),
-                ipv6_port: components.next(),
+                numeric_game_mode: components.next().and_then(|s| s.parse().ok()),
+                ipv4_port: components.next().and_then(|s| s.parse().ok()),
+                ipv6_port: components.next().and_then(|s| s.parse().ok()),
                 extra: components.collect(),
             })
         }
