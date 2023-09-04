@@ -201,7 +201,7 @@ impl Frame {
             Some(ServerState::Handshake) => {
                 if id == Self::HANDSHAKE_ID {
                     let protocol = cursor.read_var_int()?;
-                    let address = decode_mc_string(cursor)?.to_owned();
+                    let address = decode_mc_string(cursor)?;
                     let port = cursor.get_u16();
                     let state = cursor.read_var_int()?;
                     return Ok(Frame::Handshake {
@@ -228,7 +228,7 @@ impl Frame {
             None => {
                 match id {
                     Self::STATUS_RESPONSE_ID => {
-                        let json = decode_mc_string(cursor)?.to_owned();
+                        let json = decode_mc_string(cursor)?;
                         return Ok(Frame::StatusResponse { json });
                     }
                     Self::PING_RESPONSE_ID => {
