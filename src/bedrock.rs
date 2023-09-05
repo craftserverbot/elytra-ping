@@ -1,6 +1,7 @@
 use bytes::{Buf, BufMut};
 use chrono::Utc;
 use snafu::{Backtrace, OptionExt, ResultExt, Snafu};
+use std::fmt::Write;
 use std::{
     io::{Cursor, Read},
     net::AddrParseError,
@@ -35,8 +36,7 @@ impl From<BedrockServerInfo> for crate::JavaServerInfo {
     fn from(value: BedrockServerInfo) -> Self {
         let mut description = value.name;
         if let Some(map_name) = value.map_name {
-            description.push('\n');
-            description += &map_name;
+            write!(description, "\n§r{map_name}").unwrap();
         }
         crate::JavaServerInfo {
             version: None,
