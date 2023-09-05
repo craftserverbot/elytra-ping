@@ -33,18 +33,20 @@ pub struct BedrockServerInfo {
 #[cfg(feature = "java_parse")]
 impl From<BedrockServerInfo> for crate::JavaServerInfo {
     fn from(value: BedrockServerInfo) -> Self {
+        let mut description = value.name;
+        if let Some(map_name) = value.map_name {
+            description.push('\n');
+            description += &map_name;
+        }
         crate::JavaServerInfo {
-            version: Some(crate::parse::ServerVersion {
-                name: value.mc_version,
-                protocol: value.protocol_version,
-            }),
+            version: None,
             players: Some(crate::parse::ServerPlayers {
                 max: value.max_players,
                 online: value.online_players,
                 sample: None,
             }),
             description: crate::parse::ServerDescription {
-                text: value.name,
+                text: description,
                 extra: None,
             },
             favicon: None,
