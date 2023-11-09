@@ -7,7 +7,7 @@
 ## Installation
 
 ```sh
-cargo add --git https://github.com/doinkythederp/elytra-ping
+cargo add elytra-ping
 ```
 
 ## Overview
