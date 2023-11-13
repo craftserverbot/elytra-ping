@@ -8,7 +8,7 @@ rust-version = "1.68"
 categories = ["network-programming", "parser-implementations"]
 keywords = ["minecraft", "server-list-ping", "ping"]
 license = "ISC"
-repository = "https://github.com/craftserver/elytra-ping"
+repository = "https://github.com/craftserverbot/elytra-ping"
 
 [features]
 default = ["java_parse", "java_connect", "simple", "bedrock"]
