@@ -1,102 +1,76 @@
 # Elytra Ping
 
-> Easily ping and get the status of Minecraft: Java Edition servers
+> Easily retrieve the status of running Minecraft servers
 
 [![CI Status](https://github.com/doinkythederp/elytra-ping/actions/workflows/build.yml/badge.svg)](https://github.com/doinkythederp/elytra-ping/actions/workflows/build.yml)
 
-## Installation
+This crate can interact with on servers running Minecraft 1.7 or later. If you have the server's address and port, Elytra Ping can retrieve metadata like the server's description, player count, vendor, and icon. The (lack of the) server's response can also be used to infer whether it is online and usable or not.
+
+## Install
 
 ```sh
 cargo add elytra-ping
 ```
 
-## Overview
-
-This Rust library lets you fetch information from online Minecraft: Java Edition servers the [same way](https://wiki.vg/Server_List_Ping) that the official game client does.
-
-Elytra Ping will give you metadata like the server's description, player count, brand, and icon. The (lack of the) server's response can also be used to infer whether it is online or not.
-
 ## Usage
 
-The simplest way to start getting data is to use the `ping` function, which takes a hostname and port and produces the server's info and latency:
+Use the `ping_or_timeout` function to retrieve a server's status and latency, aborting if it takes too long.
 
 ```rs
-async fn ping(addrs: (String, u16)) -> Result<(ServerPingInfo, Duration), PingError>
+let (ping_info, latency) = elytra_ping::ping_or_timeout(
+    ("mc.hypixel.net".to_string(), 25565),
+    std::time::Duration::from_secs(1),
+).await.unwrap();
+println!("{ping_info:#?}, {latency:?}");
+// JavaServerInfo {
+//     players: 31757 of 200000,
+//     ...
+// }, 62.84175ms
 ```
 
-It works on most servers running Minecraft 1.7 or later:
+### Bedrock Edition
 
 ```rs
-let addrs = ("mc.hypixel.net", 25565);
-let ping_info = ping(addrs).await?;
-// -> ServerPingInfo { players: 34428 / 100000, ... }
+let (ping_info, latency) = elytra_ping::bedrock::ping(
+    ("play.cubecraft.net".to_string(), 19132),
+    std::time::Duration::from_secs(1),
+    3
+).await.unwrap();
+println!("{ping_info:#?}, {latency:?}");
+// BedrockServerInfo {
+//     online_players: 10077,
+//     max_players: 55000,
+//     game_mode: Some(
+//         "Survival",
+//     ),
+//     ...
+// }, 83ms
 ```
 
-### Time limits
+### Advanced API
 
-You can limit the time spent pinging by using the `ping_or_timeout` function, which takes a `Duration` as a second argument:
-
-```rs
-let timeout_after = Duration::from_ms(1);
-let addrs = ("mc.hypixel.net", 25565);
-
-let ping_info = ping_or_timeout(addrs, timeout_after).await;
-// -> Err(PingError::Timeout)
-```
-
-### Lower-level API
-
-Elytra Ping can be customized further by using the `connect` function, which simply establishes a connection to the server and provides you with an interface for sending and receiving packets.
-
-For instance, to get the server info as a JSON string rather than a struct:
+Elytra Ping can be customized for advanced usage by using the `SlpProtocol` API, which provides an interface for sending and receiving packets.
 
 ```rs
-let addrs = ("mc.hypixel.net", 25565);
-let client: SlpProtocol = connect(addrs).await?;
+let addrs = ("mc.hypixel.net".to_string(), 25565);
+let mut client: elytra_ping::SlpProtocol = elytra_ping::connect(addrs).await?;
 
-// Set up our connection to recieve a status packet
+// Set up our connection to receive a status packet
 client.handshake().await?;
-client.write_frame(Frame::StatusRequest).await?;
+client.write_frame(elytra_ping::protocol::Frame::StatusRequest).await?;
 
 // Read the status packet from the server
-let frame: Frame = client
+let frame: elytra_ping::protocol::Frame = client
     .read_frame(None)
     .await?
     .expect("connection closed by server");
 
 let status: String = match frame {
-    Frame::StatusResponse { json } => json,
+    elytra_ping::protocol::Frame::StatusResponse { json } => json,
     _ => panic!("expected status packet"),
 };
 
 println!("Status: {}", status);
 
-// It's important to run the `disconnect`
-// method when you're done to clean up the connection.
-connection.disconnect().await?;
-```
-
-The low-level API can also parse packets meant to be sent to the server. Because the handshake packet ID and the status request packet ID are the same, it's necessary to keep some kind of state to decide which makes sense in the particular situation.
-
-```rs
-let mut server = SlpProtocol::new(server_hostname, server_port, tcp_stream);
-let mut server_state = ServerState::Handshake;
-
-loop {
-    let frame: Frame = server
-        .read_frame(server_state)
-        .await?
-        .expect("client lost connection"); server_state = ServerState::Status;
-
-    match frame {
-        Frame::Handshake { status, protocol, ..} => {
-            // todo: ensure suitable values for status and protocol
-            server_state = ServerState::Status;
-        }
-
-        Frame::StatusRequest => {
-            server.write_frame(StatusResponse { json: "{...}" }).await?;
-        }
-    }
-}
+client.disconnect().await?;
 ```

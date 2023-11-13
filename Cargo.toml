@@ -1,6 +1,6 @@
 [package]
 name = "elytra-ping"
-description = "Easily ping and get the status of Minecraft: Java Edition servers"
+description = "Easily ping and get the status of running Minecraft servers"
 version = "2.0.1"
 edition = "2021"
 authors = ["doinkythederp"]
