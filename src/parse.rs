@@ -12,20 +12,20 @@ use self::fancy_string::FancyText;
 pub struct JavaServerInfo {
     pub version: Option<ServerVersion>,
     pub players: Option<ServerPlayers>,
-    #[serde(deserialize_with = "string_or_struct")]
+    #[serde(deserialize_with = "de_description")]
     pub description: ServerDescription,
     pub favicon: Option<String>,
     #[serde(rename = "deserialize_description")]
     pub mod_info: Option<ServerModInfo>,
 }
 
-fn string_or_struct<'de, D>(deserializer: D) -> Result<ServerDescription, D::Error>
+fn de_description<'de, D>(deserializer: D) -> Result<ServerDescription, D::Error>
 where
     D: Deserializer<'de>,
 {
-    struct StringOrStruct;
+    struct DeDescription;
 
-    impl<'de> Visitor<'de> for StringOrStruct {
+    impl<'de> Visitor<'de> for DeDescription {
         type Value = ServerDescription;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -50,7 +50,7 @@ where
         }
     }
 
-    deserializer.deserialize_any(StringOrStruct)
+    deserializer.deserialize_any(DeDescription)
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
@@ -120,6 +120,7 @@ pub mod fancy_string {
             color: String,
             text: String,
         },
+        #[serde(deserialize_with = "de_plain_text")]
         PlainText {
             text: String,
         },
@@ -168,5 +169,36 @@ pub mod fancy_string {
                 }
             }
         }
+    }
+
+    fn de_plain_text<'de, D>(deserializer: D) -> Result<String, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct DePlainText;
+
+        impl<'de> serde::de::Visitor<'de> for DePlainText {
+            type Value = String;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("string or plain text object")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<String, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(value.to_owned())
+            }
+
+            fn visit_map<M>(self, map: M) -> Result<String, M::Error>
+            where
+                M: serde::de::MapAccess<'de>,
+            {
+                serde::Deserialize::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+            }
+        }
+
+        deserializer.deserialize_any(DePlainText)
     }
 }
