@@ -55,8 +55,8 @@ impl From<BedrockServerInfo> for crate::JavaServerInfo {
     }
 }
 
+/// Server MOTD string is missing information.
 #[derive(Debug, Snafu)]
-#[snafu(display("Not enough motd components"))]
 pub struct ServerInfoParseError;
 
 impl FromStr for BedrockServerInfo {
@@ -88,30 +88,35 @@ impl FromStr for BedrockServerInfo {
 
 #[derive(Debug, Snafu)]
 pub enum BedrockPingError {
+    /// Failed to parse address.
     #[snafu(display("Failed to parse address {address:?}: {source}"))]
     AddressParse {
         source: AddrParseError,
         address: String,
         backtrace: Backtrace,
     },
-    #[snafu(display("Server did not respond"))]
+    /// The server did not respond to the ping request.
     NoResponse { backtrace: Backtrace },
+    /// Failed to parse server info.
     #[snafu(display("Failed to parse server info: {source}"), context(false))]
     ServerInfoParse {
         source: ServerInfoParseError,
         backtrace: Backtrace,
     },
-    #[snafu(display("io error: {source}"), context(false))]
+    /// I/O error.
+    #[snafu(display("I/O error: {source}"), context(false))]
     Io {
         source: std::io::Error,
         backtrace: Backtrace,
     },
-    #[snafu(display("dns lookup failed for address `{address}`"))]
+    /// DNS lookup failed.
+    #[snafu(display("DNS lookup failed for address `{address}`"))]
     DNSLookupFailed {
         address: String,
         backtrace: Backtrace,
     },
-    #[snafu(display("failed to open socket: {source}"))]
+    /// Failed to open socket.
+    #[snafu(display("Failed to open socket: {source}"))]
     ConnectFailed {
         source: std::io::Error,
         backtrace: Backtrace,

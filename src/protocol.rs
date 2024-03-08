@@ -23,41 +23,44 @@ mod frame;
 
 #[derive(Snafu, Debug)]
 pub enum ProtocolError {
-    #[snafu(display("io error: {source}"), context(false))]
+    /// I/O error.
+    #[snafu(display("I/O error: {source}"), context(false))]
     Io {
         source: std::io::Error,
         backtrace: Backtrace,
     },
-    #[snafu(display("failed to encode string as bytes: {source}"), context(false))]
+    /// Failed to encode string as bytes.
+    #[snafu(display("Failed to encode string as bytes: {source}"), context(false))]
     StringEncodeFailed {
         #[snafu(backtrace)]
         source: McStringError,
     },
-    #[snafu(display(
-        "failed to send packet because it is too long (more than {} bytes)",
-        i32::MAX
-    ))]
+    /// Failed to send a packet because it was longer than the maximum i32.
     PacketTooLong { backtrace: Backtrace },
-    #[snafu(display("connection closed unexpectedly"))]
+    /// Connection closed unexpectedly.
     ConnectionClosed { backtrace: Backtrace },
-    #[snafu(display("failed to parse packet: {source}"), context(false))]
+    /// Failed to parse a packet.
+    #[snafu(display("Failed to parse a packet: {source}"), context(false))]
     ParseFailed {
         #[snafu(backtrace)]
         source: FrameError,
     },
-    #[snafu(display("srv resolver creation failed: {source}"), context(false))]
+    /// Failed to resolve SRV record.
+    #[snafu(display("Failed to resolve SRV record: {source}"), context(false))]
     SrvResolveError {
         source: trust_dns_resolver::error::ResolveError,
         backtrace: Backtrace,
     },
-    #[snafu(display("packet received out of order"))]
+    /// Packet received out of order.
     FrameOutOfOrder { backtrace: Backtrace },
-    #[snafu(display("failed to parse server response: {source}"), context(false))]
+    /// Failed to parse JSON response.
+    #[snafu(display("Failed to parse JSON response: {source}"), context(false))]
     JsonParse {
         source: serde_json::Error,
         backtrace: Backtrace,
     },
-    #[snafu(display("dns lookup failed for address `{address}`"))]
+    /// DNS lookup failed.
+    #[snafu(display("DNS lookup failed for address `{address}`."))]
     DNSLookupFailed {
         address: String,
         backtrace: Backtrace,

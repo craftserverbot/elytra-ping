@@ -21,12 +21,13 @@ pub mod bedrock;
 #[cfg(feature = "simple")]
 #[derive(Snafu, Debug)]
 pub enum PingError {
-    #[snafu(display("connection failed: {source}"), context(false))]
+    /// Connection failed.
+    #[snafu(display("Connection failed: {source}"), context(false))]
     Protocol {
         #[snafu(backtrace)]
         source: crate::protocol::ProtocolError,
     },
-    #[snafu(display("connection did not respond in time"))]
+    /// The connection did not finish in time.
     Timeout { backtrace: Backtrace },
 }
 

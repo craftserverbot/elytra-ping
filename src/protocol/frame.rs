@@ -9,29 +9,23 @@ use crate::mc_string::{decode_mc_string, McStringError};
 
 #[derive(Snafu, Debug)]
 pub enum FrameError {
-    #[snafu(display("frame is missing data"))]
+    /// Received an incomplete frame.
     Incomplete { backtrace: Backtrace },
-    #[snafu(display("io error: {source}"), context(false))]
+    /// I/O error.
+    #[snafu(display("I/O error: {source}"), context(false))]
     Io {
         source: std::io::Error,
         backtrace: Backtrace,
     },
-    #[snafu(display("frame declares it has negative length"))]
+    /// Received a frame with an invalid length.
     InvalidLength { backtrace: Backtrace },
-    #[snafu(display("cannot parse frame with id {id}"))]
-    InvalidFrame { id: i32, backtrace: Backtrace },
-    #[snafu(display("failed to decode string: {source}"), context(false))]
+    /// Received a frame with an invalid id.
+    InvalidFrameId { id: i32, backtrace: Backtrace },
+    /// Failed to decode string.
+    #[snafu(display("Failed to decode string: {source}"), context(false))]
     StringDecodeFailed {
         #[snafu(backtrace)]
         source: McStringError,
-    },
-    #[snafu(
-        display("failed to decode ping response payload: {source}"),
-        context(false)
-    )]
-    PingResponseDecodeFailed {
-        source: TryFromSliceError,
-        backtrace: Backtrace,
     },
 }
 
@@ -155,6 +149,6 @@ impl Frame {
             }
         }
 
-        InvalidFrameSnafu { id }.fail()
+        InvalidFrameIdSnafu { id }.fail()
     }
 }
