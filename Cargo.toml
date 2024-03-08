@@ -26,7 +26,7 @@ mc-varint = "0.1"
 rand = { version = "0.8", optional = true }
 serde = { version = "1.0", optional = true, features = ["serde_derive"] }
 serde_json = { version = "1.0", optional = true }
-snafu = { version = "0.7", features = ["backtraces-impl-backtrace-crate"] }
+snafu = { version = "0.8.1", features = ["backtraces-impl-backtrace-crate"] }
 tokio = { version = "1.21", features = [
     "net",
     "io-util",
@@ -35,7 +35,6 @@ tokio = { version = "1.21", features = [
 ], optional = true }
 tracing = "0.1"
 trust-dns-resolver = { version = "0.23", optional = true }
-#void = { version = "1.0", optional = true }
 
 [dev-dependencies]
 ctor = "0.2.4"

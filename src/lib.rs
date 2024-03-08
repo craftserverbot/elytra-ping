@@ -1,16 +1,12 @@
+use snafu::{Backtrace, Snafu};
 use std::time::Duration;
-#[cfg(feature = "java_connect")]
-use tokio::net::{lookup_host, TcpStream};
-use tracing::{debug, info, instrument};
 
 #[cfg(feature = "java_connect")]
 pub mod mc_string;
 #[cfg(feature = "java_connect")]
 pub mod protocol;
 #[cfg(feature = "java_connect")]
-use crate::protocol::{ping_error, protocol_error, ProtocolError};
-#[cfg(feature = "simple")]
-pub use protocol::PingError;
+pub use crate::protocol::connect;
 #[cfg(feature = "java_connect")]
 pub use protocol::SlpProtocol;
 
@@ -22,46 +18,16 @@ pub use parse::JavaServerInfo;
 #[cfg(feature = "bedrock")]
 pub mod bedrock;
 
-#[cfg(feature = "java_connect")]
-#[instrument]
-pub async fn connect(mut addrs: (String, u16)) -> Result<SlpProtocol, ProtocolError> {
-    use tracing::debug;
-    use trust_dns_resolver::TokioAsyncResolver;
-
-    let resolver = TokioAsyncResolver::tokio_from_system_conf()?;
-    if let Ok(records) = resolver
-        .srv_lookup(format!("_minecraft._tcp.{}", addrs.0))
-        .await
-    {
-        if let Some(record) = records.iter().next() {
-            let record = record.target().to_utf8();
-            debug!("Found SRV record: {} -> {}", addrs.0, record);
-            addrs.0 = record;
-        }
-    }
-
-    // lookup_host can return multiple but we just need one so we discard the rest
-    let socket_addrs = match lookup_host(addrs.clone()).await?.next() {
-        Some(socket_addrs) => socket_addrs,
-        None => {
-            info!("DNS lookup failed for address");
-            return Err(protocol_error::DNSLookupFailedSnafu {
-                address: format!("{:?}", addrs),
-            }
-            .build());
-        }
-    };
-
-    match TcpStream::connect(socket_addrs).await {
-        Ok(stream) => {
-            info!("Connected to SLP server");
-            Ok(SlpProtocol::new(addrs.0, addrs.1, stream))
-        }
-        Err(error) => {
-            info!("Failed to connect to SLP server: {}", error);
-            Err(error.into())
-        }
-    }
+#[cfg(feature = "simple")]
+#[derive(Snafu, Debug)]
+pub enum PingError {
+    #[snafu(display("connection failed: {source}"), context(false))]
+    Protocol {
+        #[snafu(backtrace)]
+        source: crate::protocol::ProtocolError,
+    },
+    #[snafu(display("connection did not respond in time"))]
+    Timeout { backtrace: Backtrace },
 }
 
 #[cfg(feature = "simple")]
@@ -86,7 +52,7 @@ pub async fn ping_or_timeout(
     select! {
         biased;
         info = ping(addrs) => info,
-        _ = sleep => Err(ping_error::TimeoutSnafu.build()),
+        _ = sleep => TimeoutSnafu.fail(),
     }
 }
 

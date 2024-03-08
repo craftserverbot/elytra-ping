@@ -1,26 +1,26 @@
 use bytes::Buf;
 use mc_varint::{VarInt, VarIntRead, VarIntWrite};
+use snafu::{OptionExt, Snafu};
 use std::io::Cursor;
 
-mod error {
-    use super::*;
-    use snafu::Snafu;
-
-    #[derive(Snafu, Debug)]
-    pub enum McStringError {
-        #[snafu(display("io error: {source}"))]
-        Io { source: std::io::Error },
-        #[snafu(display(
-            "string is too long (is {length} bytes, but expected less than {} bytes)",
-            MAX_LEN
-        ))]
-        TooLong { length: usize },
-        #[snafu(display("invalid string format"))]
-        InvalidFormat,
-    }
+#[derive(Snafu, Debug)]
+pub enum McStringError {
+    #[snafu(display("io error: {source}"), context(false))]
+    Io {
+        source: std::io::Error,
+        backtrace: snafu::Backtrace,
+    },
+    #[snafu(display(
+        "string is too long (is {length} bytes, but expected less than {} bytes)",
+        MAX_LEN
+    ))]
+    TooLong {
+        length: usize,
+        backtrace: snafu::Backtrace,
+    },
+    #[snafu(display("invalid string format"))]
+    InvalidFormat { backtrace: snafu::Backtrace },
 }
-
-pub use error::McStringError;
 
 pub const MAX_LEN: i32 = i32::MAX;
 
@@ -28,27 +28,26 @@ pub fn encode_mc_string(string: &str) -> Result<Vec<u8>, McStringError> {
     let len = string.len();
     // VarInt max length is 5 bytes
     let mut bytes = Vec::with_capacity(len + 5);
-    bytes
-        .write_var_int(VarInt::from(
-            i32::try_from(len)
-                .ok()
-                .ok_or(McStringError::TooLong { length: len })?,
-        ))
-        .map_err(|io| McStringError::Io { source: io })?;
+    bytes.write_var_int(VarInt::from(
+        i32::try_from(len)
+            .ok()
+            .context(TooLongSnafu { length: len })?,
+    ))?;
     bytes.extend_from_slice(string.as_bytes());
     Ok(bytes)
 }
 
 pub fn decode_mc_string(cursor: &mut Cursor<&[u8]>) -> Result<String, McStringError> {
-    let len: i32 = cursor
-        .read_var_int()
-        .map_err(|io| McStringError::Io { source: io })?
-        .into();
-    let len = usize::try_from(len).map_err(|_| McStringError::InvalidFormat)?;
+    let len: i32 = cursor.read_var_int()?.into();
+    let len = usize::try_from(len).ok().context(InvalidFormatSnafu)?;
 
     let bytes = cursor.chunk();
-    let string = std::str::from_utf8(&bytes[..len])
-        .map_err(|_| McStringError::InvalidFormat)?
+    if len > bytes.len() {
+        return InvalidFormatSnafu.fail();
+    }
+    let string = std::str::from_utf8(bytes.get(..len).context(InvalidFormatSnafu)?)
+        .ok()
+        .context(InvalidFormatSnafu)?
         .to_string();
     cursor.advance(len);
     Ok(string)
