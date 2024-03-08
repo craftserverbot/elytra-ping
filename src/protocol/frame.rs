@@ -1,4 +1,4 @@
-use std::{array::TryFromSliceError, io::Cursor};
+use std::io::Cursor;
 
 use bytes::Buf;
 use mc_varint::{VarInt, VarIntRead};
