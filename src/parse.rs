@@ -15,7 +15,7 @@ pub struct JavaServerInfo {
     #[serde(deserialize_with = "de_description")]
     pub description: ServerDescription,
     pub favicon: Option<String>,
-    #[serde(rename = "deserialize_description")]
+    #[serde(rename = "modinfo")]
     pub mod_info: Option<ServerModInfo>,
 }
 
@@ -87,7 +87,16 @@ pub struct ServerDescription {
 pub struct ServerModInfo {
     #[serde(rename = "type")]
     pub loader_type: String,
-    // pub mod_list: Vec<ServerModInfoMod>,
+    #[serde(rename = "modList")]
+    pub mod_list: Vec<ServerMod>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ServerMod {
+    #[serde(rename = "modid")]
+    pub mod_id: String,
+    pub version: String,
 }
 
 impl std::str::FromStr for JavaServerInfo {

@@ -17,6 +17,8 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufWriter},
     net::TcpStream,
 };
+use tracing::error;
+use tracing::info;
 use tracing::{debug, event, instrument, trace, Level};
 
 mod frame;
@@ -52,7 +54,11 @@ pub enum ProtocolError {
         backtrace: Backtrace,
     },
     /// Packet received out of order.
-    FrameOutOfOrder { backtrace: Backtrace },
+    FrameOutOfOrder {
+        backtrace: Backtrace,
+        expected: &'static str,
+        got: Frame,
+    },
     /// Failed to parse JSON response.
     #[snafu(display("Failed to parse JSON response: {source}"), context(false))]
     JsonParse {
@@ -100,7 +106,6 @@ impl SlpProtocol {
     }
 
     /// Sends frame data over the connection as a packet.
-    #[instrument]
     pub async fn write_frame(&mut self, frame: Frame) -> Result<(), ProtocolError> {
         debug!("Writing frame: {frame:?}");
 
@@ -170,6 +175,7 @@ impl SlpProtocol {
             // Attempt to parse a frame from the buffered data. If enough data
             // has been buffered, the frame is returned.
             if let Some(frame) = self.parse_frame(server_state)? {
+                debug!("Received frame: {frame:?}");
                 return Ok(Some(frame));
             }
 
@@ -185,12 +191,13 @@ impl SlpProtocol {
                 // there is, this means that the peer closed the socket while
                 // sending a frame.
                 if self.buffer.is_empty() {
+                    info!("Connection closed cleanly");
                     return Ok(None);
-                } else {
-                    return Err(ProtocolError::ConnectionClosed {
-                        backtrace: Backtrace::generate(),
-                    });
                 }
+                error!("Connection closed unexpectedly");
+                return Err(ProtocolError::ConnectionClosed {
+                    backtrace: Backtrace::generate(),
+                });
             }
         }
     }
@@ -245,7 +252,13 @@ impl SlpProtocol {
             .context(ConnectionClosedSnafu)?;
         let frame_data = match frame {
             Frame::StatusResponse { json } => json,
-            _ => return FrameOutOfOrderSnafu.fail(),
+            frame => {
+                return FrameOutOfOrderSnafu {
+                    expected: "StatusResponse",
+                    got: frame,
+                }
+                .fail()
+            }
         };
         Ok(JavaServerInfo::from_str(&frame_data)?)
     }
@@ -266,8 +279,12 @@ impl SlpProtocol {
             .await?
             .context(ConnectionClosedSnafu)?;
         match frame {
-            Frame::PingResponse { payload: _ } => Ok(ping_time.elapsed()),
-            _ => FrameOutOfOrderSnafu.fail(),
+            Frame::PingResponse { .. } | Frame::StatusResponse { .. } => Ok(ping_time.elapsed()),
+            frame => FrameOutOfOrderSnafu {
+                expected: "PingResponse",
+                got: frame,
+            }
+            .fail(),
         }
     }
 }
