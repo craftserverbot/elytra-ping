@@ -109,7 +109,7 @@ impl std::str::FromStr for JavaServerInfo {
 pub mod fancy_string {
     use serde::{Deserialize, Serialize};
 
-    #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq)]
+    #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq, Default)]
     pub struct FancyText(pub Vec<FancyTextComponent>);
 
     impl FancyText {
@@ -125,15 +125,13 @@ pub mod fancy_string {
     #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq)]
     #[serde(untagged)]
     pub enum FancyTextComponent {
-        ColorText {
-            color: String,
-            text: String,
-        },
         #[serde(deserialize_with = "de_plain_text")]
-        PlainText {
+        Plain {
             text: String,
+            #[serde(default)]
+            color: Option<String>,
         },
-        NestedText {
+        Nested {
             #[serde(default)]
             bold: bool,
             #[serde(default)]
@@ -144,6 +142,7 @@ pub mod fancy_string {
             strikethrough: bool,
             #[serde(default)]
             obfuscated: bool,
+            #[serde(default)]
             extra: FancyText,
         },
     }
@@ -151,9 +150,8 @@ pub mod fancy_string {
     impl FancyTextComponent {
         pub fn to_markdown(&self) -> String {
             match self {
-                FancyTextComponent::ColorText { color: _, text } => text.clone(),
-                FancyTextComponent::PlainText { text } => text.clone(),
-                FancyTextComponent::NestedText {
+                FancyTextComponent::Plain { text, .. } => text.clone(),
+                FancyTextComponent::Nested {
                     bold,
                     italic,
                     underlined,
@@ -180,27 +178,27 @@ pub mod fancy_string {
         }
     }
 
-    fn de_plain_text<'de, D>(deserializer: D) -> Result<String, D::Error>
+    fn de_plain_text<'de, D>(deserializer: D) -> Result<(String, Option<String>), D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         struct DePlainText;
 
         impl<'de> serde::de::Visitor<'de> for DePlainText {
-            type Value = String;
+            type Value = (String, Option<String>);
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("string or plain text object")
             }
 
-            fn visit_str<E>(self, value: &str) -> Result<String, E>
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(value.to_owned())
+                Ok((value.to_owned(), None))
             }
 
-            fn visit_map<M>(self, map: M) -> Result<String, M::Error>
+            fn visit_map<M>(self, map: M) -> Result<Self::Value, M::Error>
             where
                 M: serde::de::MapAccess<'de>,
             {
