@@ -102,43 +102,6 @@ impl std::str::FromStr for JavaServerInfo {
 pub mod fancy_string {
     use serde::{Deserialize, Serialize};
 
-    pub trait ToMarkdown {
-        /// Formats the given value as a markdown string.
-        ///
-        /// # Example
-        ///
-        /// ```
-        /// # use elytra_ping::parse::fancy_string::*;
-        /// let fancy_text = FancyText(vec![
-        ///    FancyTextComponent::Nested {
-        ///       bold: true,
-        ///       italic: false,
-        ///       underlined: false,
-        ///       strikethrough: false,
-        ///       obfuscated: false,
-        ///       extra: FancyText(vec![
-        ///          FancyTextComponent::Plain {
-        ///            text: "Hello, world!".to_owned(),
-        ///            color: None,
-        ///          },
-        ///       ]),
-        ///    },
-        /// ]);
-        /// assert_eq!(fancy_text.to_markdown(), "**Hello, world!**");
-        /// ```
-        fn to_markdown(&self) -> String;
-    }
-
-    impl ToMarkdown for Vec<FancyText> {
-        fn to_markdown(&self) -> String {
-            let mut builder = String::with_capacity(10);
-            for component in self {
-                builder += &component.to_markdown();
-            }
-            builder
-        }
-    }
-
     #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq, Default)]
     pub struct FancyText {
         #[serde(default)]
@@ -157,38 +120,6 @@ pub mod fancy_string {
         pub obfuscated: bool,
         #[serde(default)]
         pub extra: Option<Vec<FancyText>>,
-    }
-
-    impl ToMarkdown for FancyText {
-        fn to_markdown(&self) -> String {
-            let Self {
-                text,
-                color: _,
-                bold,
-                italic,
-                underlined,
-                strikethrough,
-                obfuscated: _,
-                extra,
-            } = self;
-            let mut text = text.clone().unwrap_or_default();
-            if let Some(extra) = extra {
-                text += &extra.to_markdown();
-            }
-            if *bold {
-                text = format!("**{text}**");
-            }
-            if *italic {
-                text = format!("*{text}*");
-            }
-            if *underlined {
-                text = format!("__{text}__");
-            }
-            if *strikethrough {
-                text = format!("~~{text}~~");
-            }
-            text
-        }
     }
 
     fn de_plain_text<'de, D>(deserializer: D) -> Result<(String, Option<String>), D::Error>

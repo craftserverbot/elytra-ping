@@ -1,4 +1,4 @@
-use elytra_ping::{parse::fancy_string::ToMarkdown, ping};
+use elytra_ping::ping;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,10 +20,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (info, latency) = ping((host, port)).await?;
     println!("Server info: {:#?}", info);
     println!("Latency: {}ms", latency.as_millis());
-    println!(
-        "Markdown Description\n---\n{}",
-        info.description.to_markdown()
-    );
 
     Ok(())
 }
