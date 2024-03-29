@@ -109,11 +109,38 @@ impl std::str::FromStr for JavaServerInfo {
 pub mod fancy_string {
     use serde::{Deserialize, Serialize};
 
+    pub trait ToMarkdown {
+        /// Formats the given value as a markdown string.
+        ///
+        /// # Example
+        ///
+        /// ```
+        /// # use elytra_ping::parse::fancy_string::*;
+        /// let fancy_text = FancyText(vec![
+        ///    FancyTextComponent::Nested {
+        ///       bold: true,
+        ///       italic: false,
+        ///       underlined: false,
+        ///       strikethrough: false,
+        ///       obfuscated: false,
+        ///       extra: FancyText(vec![
+        ///          FancyTextComponent::Plain {
+        ///            text: "Hello, world!".to_owned(),
+        ///            color: None,
+        ///          },
+        ///       ]),
+        ///    },
+        /// ]);
+        /// assert_eq!(fancy_text.to_markdown(), "**Hello, world!**");
+        /// ```
+        fn to_markdown(&self) -> String;
+    }
+
     #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq, Default)]
     pub struct FancyText(pub Vec<FancyTextComponent>);
 
-    impl FancyText {
-        pub fn to_markdown(&self) -> String {
+    impl ToMarkdown for FancyText {
+        fn to_markdown(&self) -> String {
             let mut builder = String::with_capacity(10);
             for component in &self.0 {
                 builder += &component.to_markdown();
@@ -147,8 +174,8 @@ pub mod fancy_string {
         },
     }
 
-    impl FancyTextComponent {
-        pub fn to_markdown(&self) -> String {
+    impl ToMarkdown for FancyTextComponent {
+        fn to_markdown(&self) -> String {
             match self {
                 FancyTextComponent::Plain { text, .. } => text.clone(),
                 FancyTextComponent::Nested {
