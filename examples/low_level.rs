@@ -45,11 +45,11 @@ async fn main() -> Result<(), ProtocolError> {
     let frame = next_frame(&mut connection).await?;
 
     if let Frame::StatusResponse { json } = frame {
+        println!("JSON: {json}");
         match JavaServerInfo::from_str(&json) {
             Ok(info) => println!("Server info: {:#?}", info),
             Err(error) => {
                 println!("Error parsing server info: {error}");
-                println!("JSON: {json}");
             }
         }
     } else {

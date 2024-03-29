@@ -45,9 +45,9 @@ impl From<BedrockServerInfo> for crate::JavaServerInfo {
                 online: value.online_players,
                 sample: None,
             }),
-            description: crate::parse::ServerDescription {
-                text: description,
-                extra: None,
+            description: crate::parse::fancy_string::FancyText {
+                text: Some(description),
+                ..Default::default()
             },
             favicon: None,
             mod_info: None,

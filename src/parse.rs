@@ -13,36 +13,36 @@ pub struct JavaServerInfo {
     pub version: Option<ServerVersion>,
     pub players: Option<ServerPlayers>,
     #[serde(deserialize_with = "de_description")]
-    pub description: ServerDescription,
+    pub description: FancyText,
     pub favicon: Option<String>,
     #[serde(rename = "modinfo")]
     pub mod_info: Option<ServerModInfo>,
 }
 
-fn de_description<'de, D>(deserializer: D) -> Result<ServerDescription, D::Error>
+fn de_description<'de, D>(deserializer: D) -> Result<FancyText, D::Error>
 where
     D: Deserializer<'de>,
 {
     struct DeDescription;
 
     impl<'de> Visitor<'de> for DeDescription {
-        type Value = ServerDescription;
+        type Value = FancyText;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             formatter.write_str("string or map")
         }
 
-        fn visit_str<E>(self, value: &str) -> Result<ServerDescription, E>
+        fn visit_str<E>(self, value: &str) -> Result<FancyText, E>
         where
             E: de::Error,
         {
-            Ok(ServerDescription {
-                text: value.to_owned(),
-                extra: None,
+            Ok(FancyText {
+                text: Some(value.to_owned()),
+                ..Default::default()
             })
         }
 
-        fn visit_map<M>(self, map: M) -> Result<ServerDescription, M::Error>
+        fn visit_map<M>(self, map: M) -> Result<FancyText, M::Error>
         where
             M: MapAccess<'de>,
         {
@@ -73,13 +73,6 @@ pub struct ServerPlayers {
 pub struct ServerPlayersSample {
     pub name: Option<String>,
     pub id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct ServerDescription {
-    pub text: String,
-    pub extra: Option<FancyText>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
@@ -136,72 +129,65 @@ pub mod fancy_string {
         fn to_markdown(&self) -> String;
     }
 
-    #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq, Default)]
-    pub struct FancyText(pub Vec<FancyTextComponent>);
-
-    impl ToMarkdown for FancyText {
+    impl ToMarkdown for Vec<FancyText> {
         fn to_markdown(&self) -> String {
             let mut builder = String::with_capacity(10);
-            for component in &self.0 {
+            for component in self {
                 builder += &component.to_markdown();
             }
             builder
         }
     }
 
-    #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq)]
-    #[serde(untagged)]
-    pub enum FancyTextComponent {
-        #[serde(deserialize_with = "de_plain_text")]
-        Plain {
-            text: String,
-            #[serde(default)]
-            color: Option<String>,
-        },
-        Nested {
-            #[serde(default)]
-            bold: bool,
-            #[serde(default)]
-            italic: bool,
-            #[serde(default)]
-            underlined: bool,
-            #[serde(default)]
-            strikethrough: bool,
-            #[serde(default)]
-            obfuscated: bool,
-            #[serde(default)]
-            extra: FancyText,
-        },
+    #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq, Default)]
+    pub struct FancyText {
+        #[serde(default)]
+        pub text: Option<String>,
+        #[serde(default)]
+        pub color: Option<String>,
+        #[serde(default)]
+        pub bold: bool,
+        #[serde(default)]
+        pub italic: bool,
+        #[serde(default)]
+        pub underlined: bool,
+        #[serde(default)]
+        pub strikethrough: bool,
+        #[serde(default)]
+        pub obfuscated: bool,
+        #[serde(default)]
+        pub extra: Option<Vec<FancyText>>,
     }
 
-    impl ToMarkdown for FancyTextComponent {
+    impl ToMarkdown for FancyText {
         fn to_markdown(&self) -> String {
-            match self {
-                FancyTextComponent::Plain { text, .. } => text.clone(),
-                FancyTextComponent::Nested {
-                    bold,
-                    italic,
-                    underlined,
-                    strikethrough,
-                    obfuscated: _,
-                    extra,
-                } => {
-                    let mut text = extra.to_markdown();
-                    if *bold {
-                        text = format!("**{text}**");
-                    }
-                    if *italic {
-                        text = format!("*{text}*");
-                    }
-                    if *underlined {
-                        text = format!("__{text}__");
-                    }
-                    if *strikethrough {
-                        text = format!("~~{text}~~");
-                    }
-                    text
-                }
+            let Self {
+                text,
+                color: _,
+                bold,
+                italic,
+                underlined,
+                strikethrough,
+                obfuscated: _,
+                extra,
+            } = self;
+            let mut text = text.clone().unwrap_or_default();
+            if let Some(extra) = extra {
+                text += &extra.to_markdown();
             }
+            if *bold {
+                text = format!("**{text}**");
+            }
+            if *italic {
+                text = format!("*{text}*");
+            }
+            if *underlined {
+                text = format!("__{text}__");
+            }
+            if *strikethrough {
+                text = format!("~~{text}~~");
+            }
+            text
         }
     }
 
