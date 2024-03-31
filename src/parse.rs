@@ -1,56 +1,14 @@
-use std::fmt;
-
-use serde::{
-    de::{self, MapAccess, Visitor},
-    Deserialize, Deserializer, Serialize,
-};
-
-use self::fancy_string::FancyText;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct JavaServerInfo {
     pub version: Option<ServerVersion>,
     pub players: Option<ServerPlayers>,
-    #[serde(deserialize_with = "de_description")]
-    pub description: FancyText,
+    pub description: TextComponent,
     pub favicon: Option<String>,
     #[serde(rename = "modinfo")]
     pub mod_info: Option<ServerModInfo>,
-}
-
-fn de_description<'de, D>(deserializer: D) -> Result<FancyText, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct DeDescription;
-
-    impl<'de> Visitor<'de> for DeDescription {
-        type Value = FancyText;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("string or map")
-        }
-
-        fn visit_str<E>(self, value: &str) -> Result<FancyText, E>
-        where
-            E: de::Error,
-        {
-            Ok(FancyText {
-                text: Some(value.to_owned()),
-                ..Default::default()
-            })
-        }
-
-        fn visit_map<M>(self, map: M) -> Result<FancyText, M::Error>
-        where
-            M: MapAccess<'de>,
-        {
-            Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
-        }
-    }
-
-    deserializer.deserialize_any(DeDescription)
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
@@ -99,57 +57,48 @@ impl std::str::FromStr for JavaServerInfo {
     }
 }
 
-pub mod fancy_string {
-    use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum TextComponent {
+    Plain(String),
+    Fancy(FancyText),
+    Extra(Vec<TextComponent>),
+}
 
-    #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq, Default)]
-    pub struct FancyText {
-        #[serde(default)]
-        pub text: Option<String>,
-        #[serde(default)]
-        pub color: Option<String>,
-        #[serde(default)]
-        pub bold: bool,
-        #[serde(default)]
-        pub italic: bool,
-        #[serde(default)]
-        pub underlined: bool,
-        #[serde(default)]
-        pub strikethrough: bool,
-        #[serde(default)]
-        pub obfuscated: bool,
-        #[serde(default)]
-        pub extra: Option<Vec<FancyText>>,
-    }
+#[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq, Default)]
+pub struct FancyText {
+    #[serde(default)]
+    pub text: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub bold: Option<bool>,
+    #[serde(default)]
+    pub italic: Option<bool>,
+    #[serde(default)]
+    pub underlined: Option<bool>,
+    #[serde(default)]
+    pub strikethrough: Option<bool>,
+    #[serde(default)]
+    pub obfuscated: Option<bool>,
+    #[serde(default)]
+    pub extra: Option<Vec<TextComponent>>,
+}
 
-    fn de_plain_text<'de, D>(deserializer: D) -> Result<(String, Option<String>), D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct DePlainText;
-
-        impl<'de> serde::de::Visitor<'de> for DePlainText {
-            type Value = (String, Option<String>);
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("string or plain text object")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok((value.to_owned(), None))
-            }
-
-            fn visit_map<M>(self, map: M) -> Result<Self::Value, M::Error>
-            where
-                M: serde::de::MapAccess<'de>,
-            {
-                serde::Deserialize::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+impl From<TextComponent> for FancyText {
+    fn from(value: TextComponent) -> Self {
+        match value {
+            TextComponent::Plain(text) => FancyText {
+                text: Some(text),
+                ..Default::default()
+            },
+            TextComponent::Fancy(fancy) => fancy,
+            TextComponent::Extra(components) => {
+                let mut components = components.into_iter();
+                let mut first = components.next().map(FancyText::from).unwrap_or_default();
+                first.extra.get_or_insert_with(Vec::new).extend(components);
+                first
             }
         }
-
-        deserializer.deserialize_any(DePlainText)
     }
 }
