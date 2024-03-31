@@ -66,6 +66,7 @@ pub enum TextComponent {
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct FancyText {
     #[serde(default)]
     pub text: Option<String>,
