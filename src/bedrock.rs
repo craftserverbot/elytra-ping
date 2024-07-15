@@ -48,6 +48,9 @@ impl From<BedrockServerInfo> for crate::JavaServerInfo {
             description: crate::parse::TextComponent::Plain(description),
             favicon: None,
             mod_info: None,
+            enforces_secure_chat: None,
+            prevents_chat_reports: None,
+            previews_chat: None,
         }
     }
 }

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 #[non_exhaustive]
+#[serde(rename_all = "camelCase")]
 pub struct JavaServerInfo {
     pub version: Option<ServerVersion>,
     pub players: Option<ServerPlayers>,
@@ -9,6 +10,13 @@ pub struct JavaServerInfo {
     pub favicon: Option<String>,
     #[serde(rename = "modinfo")]
     pub mod_info: Option<ServerModInfo>,
+    /// Servers with the No Chat Reports mod installed will set this field to `true` to indicate
+    /// to players that all chat messages sent on this server are not reportable to Mojang.
+    pub prevents_chat_reports: Option<bool>,
+    /// If the server supports Chat Preview (added in 1.19 and removed in 1.19.3), this field is set to `true`.
+    pub previews_chat: Option<bool>,
+    /// Servers will set this field to `true` if they block chat messages that cannot be reported to Mojang.
+    pub enforces_secure_chat: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
@@ -26,11 +34,23 @@ pub struct ServerPlayers {
     pub sample: Option<Vec<ServerPlayersSample>>,
 }
 
+/// Contains basic information about one of the players in a server.
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ServerPlayersSample {
+    /// The player's username
     pub name: Option<String>,
+    /// The player's UUID
     pub id: Option<String>,
+}
+
+impl ServerPlayersSample {
+    /// Returns whether the server has chosen to hide this player's identity and is reporting placeholder information. This is generally caused by a player having the [Allow Server Listings](https://wiki.vg/Protocol#Client_Information_.28configuration.29) option set to `false`.
+    pub fn is_anonymous(&self) -> bool {
+        self.id
+            .as_deref()
+            .map_or(true, |id| id == "00000000-0000-0000-0000-000000000000")
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]

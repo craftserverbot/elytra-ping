@@ -65,7 +65,7 @@ pub enum ServerState {
 }
 
 impl Frame {
-    pub const PROTOCOL_VERSION: i32 = 754;
+    pub const PROTOCOL_VERSION: i32 = 767;
     pub const HANDSHAKE_ID: i32 = 0x00;
     pub const STATUS_REQUEST_ID: i32 = 0x00;
     pub const STATUS_RESPONSE_ID: i32 = 0x00;
