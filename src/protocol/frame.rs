@@ -51,7 +51,7 @@ pub enum Frame {
     },
 }
 
-/// Controls what packets a server can recieve
+/// Controls what packets a server can receive
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ServerState {
     /// Waiting for the Handshake packet

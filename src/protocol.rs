@@ -162,7 +162,7 @@ impl SlpProtocol {
         Ok(())
     }
 
-    /// Recieve and parse a frame from the connection.
+    /// Receive and parse a frame from the connection.
     ///
     /// # Arguments
     ///
