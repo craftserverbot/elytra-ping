@@ -49,7 +49,7 @@ println!("{ping_info:#?}, {latency:?}");
 
 ### Advanced API
 
-Elytra Ping can be customized for advanced usage by using the `SlpProtocol` API, which provides an interface for sending and receiving packets.
+Elytra Ping can be customized for advanced usage through the `SlpProtocol` API, which provides an interface for sending and receiving packets to and from Java Edition servers.
 
 ```rs
 let addrs = ("mc.hypixel.net".to_string(), 25565);
