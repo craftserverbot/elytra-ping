@@ -54,7 +54,7 @@ pub enum Frame {
 /// Controls what packets a server can receive
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[deprecated(
-    since = "6.0.0",
+    since = "5.1.0",
     note = "Elytra Ping as a SLP server is untested and not supported"
 )]
 pub enum ServerState {
