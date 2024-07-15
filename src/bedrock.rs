@@ -16,19 +16,19 @@ use tracing::{debug, trace};
 #[non_exhaustive]
 pub struct BedrockServerInfo {
     /// Usually "MCPE" for bedrock or "MCEE" for education edition.
-    edition: String,
-    name: String,
-    protocol_version: u32,
-    mc_version: String,
-    online_players: u32,
-    max_players: u32,
-    server_id: Option<u64>,
-    map_name: Option<String>,
-    game_mode: Option<String>,
-    numeric_game_mode: Option<u64>,
-    ipv4_port: Option<u16>,
-    ipv6_port: Option<u16>,
-    extra: Vec<String>,
+    pub edition: String,
+    pub name: String,
+    pub protocol_version: u32,
+    pub mc_version: String,
+    pub online_players: u32,
+    pub max_players: u32,
+    pub server_id: Option<u64>,
+    pub map_name: Option<String>,
+    pub game_mode: Option<String>,
+    pub numeric_game_mode: Option<u64>,
+    pub ipv4_port: Option<u16>,
+    pub ipv6_port: Option<u16>,
+    pub extra: Vec<String>,
 }
 
 #[cfg(feature = "java_parse")]
