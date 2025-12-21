@@ -60,10 +60,11 @@ pub enum ProtocolError {
         got: Frame,
     },
     /// Failed to parse JSON response.
-    #[snafu(display("Failed to parse JSON response: {source}"), context(false))]
+    #[snafu(display("Failed to parse JSON response: {source}"))]
     JsonParse {
         source: serde_json::Error,
         backtrace: Backtrace,
+        json: String,
     },
     /// DNS lookup failed.
     #[snafu(display("DNS lookup failed for address `{address}`."))]
@@ -245,12 +246,14 @@ impl SlpProtocol {
 
     #[cfg(feature = "simple")]
     pub async fn get_status(&mut self) -> Result<JavaServerInfo, ProtocolError> {
+        use snafu::ResultExt;
+
         self.write_frame(Frame::StatusRequest).await?;
         let frame = self
             .read_frame(None)
             .await?
             .context(ConnectionClosedSnafu)?;
-        let frame_data = match frame {
+        let json = match frame {
             Frame::StatusResponse { json } => json,
             frame => {
                 return FrameOutOfOrderSnafu {
@@ -260,7 +263,8 @@ impl SlpProtocol {
                 .fail()
             }
         };
-        Ok(JavaServerInfo::from_str(&frame_data)?)
+
+        JavaServerInfo::from_str(&json).with_context(|_| JsonParseSnafu { json })
     }
 
     #[cfg(feature = "simple")]
