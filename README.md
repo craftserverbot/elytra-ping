@@ -61,7 +61,7 @@ client.write_frame(elytra_ping::protocol::Frame::StatusRequest).await?;
 
 // Read the status packet from the server
 let frame: elytra_ping::protocol::Frame = client
-    .read_frame(None)
+    .read_frame()
     .await?
     .expect("connection closed by server");
 
