@@ -23,7 +23,7 @@ pub struct JavaServerInfo {
 #[non_exhaustive]
 pub struct ServerVersion {
     pub name: String,
-    pub protocol: u32,
+    pub protocol: i32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]

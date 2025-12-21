@@ -1,4 +1,6 @@
-use elytra_ping::ping;
+use std::process::exit;
+
+use elytra_ping::{ping, protocol::ProtocolError, PingError};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,7 +19,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Pinging {}:{}", host, port);
 
-    let (info, latency) = ping((host, port)).await?;
+    let (info, latency) = match ping((host, port)).await {
+        Ok(res) => res,
+        Err(PingError::Protocol {
+            source: ProtocolError::JsonParse { source, json, .. },
+        }) => {
+            eprintln!("Invalid JSON: {source}");
+            eprintln!("{json}");
+            exit(1);
+        }
+        Err(other) => Err(other)?,
+    };
+
     println!("Server info: {:#?}", info);
     println!("Latency: {}ms", latency.as_millis());
 
