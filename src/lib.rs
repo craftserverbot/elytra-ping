@@ -96,7 +96,7 @@ pub use parse::JavaServerInfo;
 #[cfg(feature = "bedrock")]
 pub mod bedrock;
 
-#[cfg(feature = "simple")]
+#[cfg(feature = "java_connect")]
 #[derive(Snafu, Debug)]
 pub enum PingError {
     /// Connection failed.
@@ -109,7 +109,7 @@ pub enum PingError {
     Timeout { backtrace: Backtrace },
 }
 
-#[cfg(feature = "simple")]
+#[cfg(all(feature = "java_connect", feature = "java_parse"))]
 pub async fn ping(addrs: (String, u16)) -> Result<(JavaServerInfo, Duration), PingError> {
     let mut client = connect(addrs).await?;
     client.handshake().await?;
@@ -119,7 +119,7 @@ pub async fn ping(addrs: (String, u16)) -> Result<(JavaServerInfo, Duration), Pi
     Ok((status, latency))
 }
 
-#[cfg(feature = "simple")]
+#[cfg(all(feature = "java_connect", feature = "java_parse"))]
 pub async fn ping_or_timeout(
     addrs: (String, u16),
     timeout: Duration,

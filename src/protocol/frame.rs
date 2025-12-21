@@ -51,19 +51,6 @@ pub enum Frame {
     },
 }
 
-/// Controls what packets a server can receive
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[deprecated(
-    since = "5.1.0",
-    note = "Elytra Ping as a SLP server is untested and not supported"
-)]
-pub enum ServerState {
-    /// Waiting for the Handshake packet
-    Handshake,
-    /// Ready to respond to status and ping requests
-    Status,
-}
-
 impl Frame {
     pub const PROTOCOL_VERSION: i32 = 767;
     pub const HANDSHAKE_ID: i32 = 0x00;
@@ -98,61 +85,20 @@ impl Frame {
     }
 
     /// Parse the body of a frame, after the message has already been validated with `check`.
-    ///
-    /// # Arguments
-    ///
-    /// * `src` - The buffer containing the message
-    /// * `server_state` - Switches between which type of frame to accept. Set to None to accept frames for the client.
-    pub fn parse(
-        cursor: &mut Cursor<&[u8]>,
-        server_state: Option<ServerState>,
-    ) -> Result<Frame, FrameError> {
+    pub fn parse(cursor: &mut Cursor<&[u8]>) -> Result<Frame, FrameError> {
         let id = i32::from(cursor.read_var_int()?);
 
-        match server_state {
-            Some(ServerState::Handshake) => {
-                if id == Self::HANDSHAKE_ID {
-                    let protocol = cursor.read_var_int()?;
-                    let address = decode_mc_string(cursor)?;
-                    let port = cursor.get_u16();
-                    let state = cursor.read_var_int()?;
-                    return Ok(Frame::Handshake {
-                        protocol,
-                        address,
-                        port,
-                        state,
-                    });
-                }
+        match id {
+            Self::STATUS_RESPONSE_ID => {
+                let json = decode_mc_string(cursor)?;
+                Ok(Frame::StatusResponse { json })
             }
-            Some(ServerState::Status) => {
-                match id {
-                    Self::STATUS_REQUEST_ID => {
-                        return Ok(Frame::StatusRequest);
-                    }
-                    Self::PING_REQUEST_ID => {
-                        // ping request a contains (usually) meaningless Java long
-                        let payload = cursor.get_i64();
-                        return Ok(Frame::PingRequest { payload });
-                    }
-                    _ => {}
-                }
+            Self::PING_RESPONSE_ID => {
+                // ping response contains the same Java long as the request
+                let payload = cursor.get_i64();
+                Ok(Frame::PingResponse { payload })
             }
-            None => {
-                match id {
-                    Self::STATUS_RESPONSE_ID => {
-                        let json = decode_mc_string(cursor)?;
-                        return Ok(Frame::StatusResponse { json });
-                    }
-                    Self::PING_RESPONSE_ID => {
-                        // ping response contains the same Java long as the request
-                        let payload = cursor.get_i64();
-                        return Ok(Frame::PingResponse { payload });
-                    }
-                    _ => {}
-                }
-            }
+            _ => InvalidFrameIdSnafu { id }.fail(),
         }
-
-        InvalidFrameIdSnafu { id }.fail()
     }
 }

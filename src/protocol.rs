@@ -1,4 +1,4 @@
-pub use self::frame::{Frame, FrameError, ServerState};
+pub use self::frame::{Frame, FrameError};
 use crate::mc_string::encode_mc_string;
 use crate::mc_string::McStringError;
 #[cfg(feature = "java_parse")]
@@ -8,6 +8,7 @@ use mc_varint::{VarInt, VarIntWrite};
 use snafu::OptionExt;
 use snafu::{Backtrace, GenerateImplicitData, Snafu};
 use std::str::FromStr;
+use std::time::Instant;
 use std::{
     fmt::Debug,
     io::{Cursor, Write},
@@ -61,6 +62,7 @@ pub enum ProtocolError {
     },
     /// Failed to parse JSON response.
     #[snafu(display("Failed to parse JSON response: {source}"))]
+    #[cfg(feature = "java_parse")]
     JsonParse {
         source: serde_json::Error,
         backtrace: Backtrace,
@@ -168,14 +170,11 @@ impl SlpProtocol {
     /// # Arguments
     ///
     /// * `server_state` - Switches between which type of frame to accept. Set to None to accept frames for the client.
-    pub async fn read_frame(
-        &mut self,
-        server_state: Option<ServerState>,
-    ) -> Result<Option<Frame>, ProtocolError> {
+    pub async fn read_frame(&mut self) -> Result<Option<Frame>, ProtocolError> {
         loop {
             // Attempt to parse a frame from the buffered data. If enough data
             // has been buffered, the frame is returned.
-            if let Some(frame) = self.parse_frame(server_state)? {
+            if let Some(frame) = self.parse_frame()? {
                 debug!("Received frame: {frame:?}");
                 return Ok(Some(frame));
             }
@@ -208,16 +207,13 @@ impl SlpProtocol {
     /// # Arguments
     ///
     /// * `server_state` - Switches between which type of frame to accept. Set to None to accept frames for the client.
-    pub fn parse_frame(
-        &mut self,
-        server_state: Option<ServerState>,
-    ) -> Result<Option<Frame>, ProtocolError> {
+    pub fn parse_frame(&mut self) -> Result<Option<Frame>, ProtocolError> {
         let mut cursor = Cursor::new(&self.buffer[..]);
 
         // Check whether a full frame is available
         match Frame::check(&mut cursor) {
             Ok(()) => {
-                let frame = Frame::parse(&mut cursor, server_state)?;
+                let frame = Frame::parse(&mut cursor)?;
 
                 trace!("Discarding frame from buffer");
                 // current cursor position is the entire frame
@@ -238,21 +234,17 @@ impl SlpProtocol {
         Ok(())
     }
 
-    #[cfg(feature = "simple")]
     pub async fn handshake(&mut self) -> Result<(), ProtocolError> {
         self.write_frame(self.create_handshake_frame()).await?;
         Ok(())
     }
 
-    #[cfg(feature = "simple")]
+    #[cfg(feature = "java_parse")]
     pub async fn get_status(&mut self) -> Result<JavaServerInfo, ProtocolError> {
         use snafu::ResultExt;
 
         self.write_frame(Frame::StatusRequest).await?;
-        let frame = self
-            .read_frame(None)
-            .await?
-            .context(ConnectionClosedSnafu)?;
+        let frame = self.read_frame().await?.context(ConnectionClosedSnafu)?;
         let json = match frame {
             Frame::StatusResponse { json } => json,
             frame => {
@@ -267,9 +259,7 @@ impl SlpProtocol {
         JavaServerInfo::from_str(&json).with_context(|_| JsonParseSnafu { json })
     }
 
-    #[cfg(feature = "simple")]
     pub async fn get_latency(&mut self) -> Result<Duration, ProtocolError> {
-        use std::time::Instant;
         const PING_PAYLOAD: i64 = 54321;
 
         let ping_time = Instant::now();
@@ -278,10 +268,7 @@ impl SlpProtocol {
             payload: PING_PAYLOAD,
         })
         .await?;
-        let frame = self
-            .read_frame(None)
-            .await?
-            .context(ConnectionClosedSnafu)?;
+        let frame = self.read_frame().await?.context(ConnectionClosedSnafu)?;
         match frame {
             Frame::PingResponse { .. } | Frame::StatusResponse { .. } => Ok(ping_time.elapsed()),
             frame => FrameOutOfOrderSnafu {

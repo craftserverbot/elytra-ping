@@ -11,7 +11,7 @@ use elytra_ping::{
 
 async fn next_frame(connection: &mut SlpProtocol) -> Result<Frame, ProtocolError> {
     Ok(connection
-        .read_frame(None)
+        .read_frame()
         .await?
         .expect("Connection closed before response was received"))
 }
