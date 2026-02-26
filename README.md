@@ -2,9 +2,13 @@
 
 > Easily retrieve the status of running Minecraft servers
 
+![Development: complete](https://img.shields.io/badge/development_status-complete-blue)
 [![CI Status](https://github.com/doinkythederp/elytra-ping/actions/workflows/build.yml/badge.svg)](https://github.com/doinkythederp/elytra-ping/actions/workflows/build.yml)
 
 This crate can interact with servers running Minecraft 1.7 or later. If you have the server's address and port, Elytra Ping can retrieve metadata like the server's description, player count, vendor, and icon. The (lack of the) server's response can also be used to infer whether it is online and usable or not.
+
+Elytra Ping is considered feature-complete: it works as intended, but no more updates are planned
+except for bug fixes.
 
 ## Install
 
