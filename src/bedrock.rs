@@ -20,8 +20,8 @@ pub struct BedrockServerInfo {
     pub name: String,
     pub protocol_version: u32,
     pub mc_version: String,
-    pub online_players: u32,
-    pub max_players: u32,
+    pub online_players: i32,
+    pub max_players: i32,
     pub server_id: Option<u64>,
     pub map_name: Option<String>,
     pub game_mode: Option<String>,
@@ -51,6 +51,7 @@ impl From<BedrockServerInfo> for crate::JavaServerInfo {
             enforces_secure_chat: None,
             prevents_chat_reports: None,
             previews_chat: None,
+            forge_data: None,
         }
     }
 }

@@ -17,6 +17,8 @@ pub struct JavaServerInfo {
     pub previews_chat: Option<bool>,
     /// Servers will set this field to `true` if they block chat messages that cannot be reported to Mojang.
     pub enforces_secure_chat: Option<bool>,
+    /// Forge servers will include additional data in this field.
+    pub forge_data: Option<serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
@@ -29,8 +31,8 @@ pub struct ServerVersion {
 #[derive(Serialize, Deserialize, Debug, Hash, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ServerPlayers {
-    pub max: u32,
-    pub online: u32,
+    pub max: i32,
+    pub online: i32,
     pub sample: Option<Vec<ServerPlayersSample>>,
 }
 

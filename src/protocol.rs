@@ -311,6 +311,7 @@ pub async fn connect(mut addrs: (String, u16)) -> Result<SlpProtocol, ProtocolEr
     match TcpStream::connect(socket_addrs).await {
         Ok(stream) => {
             info!("Connected to SLP server");
+            stream.set_nodelay(true)?;
             Ok(SlpProtocol::new(addrs.0, addrs.1, stream))
         }
         Err(error) => {
